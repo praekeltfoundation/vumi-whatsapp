@@ -27,3 +27,4 @@ Configuration is done through the following environment variables:
 
 `SENTRY_DSN` - if present, sets up the sentry integration and pushes to the configured
 DSN
+`HMAC_SECRET` - if present, validates Turn webhook signatures
