@@ -1,0 +1,18 @@
+[tool.poetry]
+name = "vxwhatsapp"
+version = "0.1.0"
+description = "A WhatsApp transport for Vumi"
+authors = ["Praekelt.org <dev@praekelt.org>"]
+license = "BSD-3-Clause"
+readme = "README.md"
+homepage = "https://github.com/praekeltfoundation/vumi-whatsapp"
+repository = "https://github.com/praekeltfoundation/vumi-whatsapp"
+
+[tool.poetry.dependencies]
+python = "^3.9"
+
+[tool.poetry.dev-dependencies]
+
+[build-system]
+requires = ["poetry-core>=1.0.0"]
+build-backend = "poetry.core.masonry.api"
