@@ -35,10 +35,48 @@ async def test_invalid_signature(test_client):
 
 async def test_valid_signature(test_client):
     config.HMAC_SECRET = "testsecret"
-    data = json.dumps({"test": "data"})
+    data = json.dumps(
+        {
+            "messages": [
+                {
+                    "from": "27820001001",
+                    "id": "abc123",
+                    "timestamp": "123456789",
+                    "type": "text",
+                }
+            ]
+        }
+    )
+    response = await test_client.post(
+        app.url_for("whatsapp.whatsapp_webhook"),
+        headers={"X-Turn-Hook-Signature": generate_hmac_signature(data, "testsecret")},
+        data=data,
+    )
+    assert response.status == 400
+    assert (await response.json()) == {
+        "messages": {"0": ["'text' is a required property"]}
+    }
+
+
+async def test_valid_body(test_client):
+    config.HMAC_SECRET = "testsecret"
+    data = json.dumps(
+        {
+            "messages": [
+                {
+                    "from": "27820001001",
+                    "id": "abc123",
+                    "timestamp": "123456789",
+                    "type": "text",
+                    "text": {"body": "test message"},
+                }
+            ]
+        }
+    )
     response = await test_client.post(
         app.url_for("whatsapp.whatsapp_webhook"),
         headers={"X-Turn-Hook-Signature": generate_hmac_signature(data, "testsecret")},
         data=data,
     )
     assert response.status == 200
+    assert (await response.json()) == {}
