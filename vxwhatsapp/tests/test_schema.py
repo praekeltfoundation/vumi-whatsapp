@@ -1,6 +1,7 @@
-from vxwhatsapp.schema import whatsapp_webhook_schema
 from jsonschema import validate
 from jsonschema.validators import validator_for
+
+from vxwhatsapp.schema import whatsapp_webhook_schema
 
 # Examples from the whatsapp docs
 # https://developers.facebook.com/docs/whatsapp/api/webhooks/inbound

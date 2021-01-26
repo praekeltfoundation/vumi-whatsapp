@@ -18,8 +18,8 @@ jobs:
           poetry install
       - name: Lint
         run: |
-          poetry run black .
-          poetry run isort .
+          poetry run black --check .
+          poetry run isort -c .
           poetry run mypy .
           poetry run flake8
       - name: Test

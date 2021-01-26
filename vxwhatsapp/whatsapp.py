@@ -3,7 +3,7 @@ from sanic.response import json
 
 from vxwhatsapp import config
 from vxwhatsapp.auth import validate_hmac
-from vxwhatsapp.schema import whatsapp_webhook_schema, validate_schema
+from vxwhatsapp.schema import validate_schema, whatsapp_webhook_schema
 
 bp = Blueprint("whatsapp", version=1)
 

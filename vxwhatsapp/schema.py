@@ -1,7 +1,8 @@
 from functools import wraps
+
+from jsonschema.validators import validator_for
 from sanic.request import Request
 from sanic.response import json
-from jsonschema.validators import validator_for
 
 whatsapp_webhook_schema = {
     "$schema": "http://json-schema.org/draft-07/schema#",
@@ -209,7 +210,7 @@ def validate_schema(schema: dict):
 
         @wraps(f)
         def decorated_function(request: Request, *args, **kwargs):
-            errors = {}
+            errors: dict = {}
             for e in validator.iter_errors(request.json):
                 element = errors
                 path = list(e.path)
