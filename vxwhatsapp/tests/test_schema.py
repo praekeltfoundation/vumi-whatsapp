@@ -516,6 +516,5 @@ def test_whatsapp_invalid():
     cls = validator_for(whatsapp_webhook_schema)
     validator = cls(whatsapp_webhook_schema)
     for data in whatsapp_invalid:
-        print(data)
         errors = list(validator.iter_errors(data))
         assert len(errors) > 0
