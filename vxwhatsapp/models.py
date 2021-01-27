@@ -98,3 +98,55 @@ class Message:
         if data.get("from_addr_type"):
             data["from_addr_type"] = cls.ADDRESS_TYPE(data["from_addr_type"])
         return cls(**data)
+
+
+@dataclass
+class Event:
+    class DELIVERY_STATUS(Enum):
+        PENDING = "pending"
+        FAILED = "failed"
+        DELIVERED = "delivered"
+
+    class EVENT_TYPE(Enum):
+        ACK = "ack"
+        NACK = "nack"
+        DELIVERY_REPORT = "delivery_report"
+
+    user_message_id: str
+    event_type: EVENT_TYPE
+    event_id: str = field(default_factory=generate_id)
+    message_type: str = "event"
+    message_version: str = "20110921"
+    timestamp: datetime = field(default_factory=generate_timestamp)
+    routing_metadata: dict = field(default_factory=dict)
+    helper_metadata: dict = field(default_factory=dict)
+    sent_message_id: Optional[str] = None
+    nack_reason: Optional[str] = None
+    delivery_status: Optional[DELIVERY_STATUS] = None
+
+    def __post_init__(self):
+        if self.event_type == self.EVENT_TYPE.ACK:
+            assert self.sent_message_id is not None
+        elif self.event_type == self.EVENT_TYPE.NACK:
+            assert self.nack_reason is not None
+        elif self.event_type == self.EVENT_TYPE.DELIVERY_REPORT:
+            assert self.delivery_status is not None
+
+    def to_json(self):
+        """
+        Converts the event to JSON representation for serialisation over the message
+        broker
+        """
+        return json.dumps(asdict(self), cls=JSONMessageEncoder, separators=(",", ":"))
+
+    @classmethod
+    def from_json(cls, json_string):
+        """
+        Takes a serialised event from the message broker, and converts into an event
+        object
+        """
+        data = json.loads(json_string, object_hook=date_time_decoder)
+        data["event_type"] = cls.EVENT_TYPE(data["event_type"])
+        if data.get("delivery_status"):
+            data["delivery_status"] = cls.DELIVERY_STATUS(data["delivery_status"])
+        return cls(**data)

@@ -9,7 +9,7 @@ from aio_pika import Connection, Queue
 from aio_pika.exceptions import QueueEmpty
 
 from vxwhatsapp.main import app
-from vxwhatsapp.models import Message
+from vxwhatsapp.models import Event, Message
 from vxwhatsapp.whatsapp import config
 
 
@@ -63,9 +63,9 @@ async def test_valid_signature(test_client):
     }
 
 
-async def setup_amqp_queue(connection: Connection):
+async def setup_amqp_queue(connection: Connection, queuename="whatsapp.inbound"):
     channel = await connection.channel()
-    queue = await channel.declare_queue("whatsapp.inbound", auto_delete=True)
+    queue = await channel.declare_queue(queuename, auto_delete=True)
     await queue.bind("vumi")
     return queue
 
@@ -241,3 +241,36 @@ async def test_valid_media_message(test_client):
     message = await get_amqp_message(queue)
     message = Message.from_json(message.body.decode("utf-8"))
     assert message.content == "test caption"
+
+
+async def test_valid_event(test_client):
+    queue = await setup_amqp_queue(test_client.app.amqp_connection, "whatsapp.event")
+    config.HMAC_SECRET = "testsecret"
+    data = json.dumps(
+        {
+            "statuses": [
+                {
+                    "id": "abc123",
+                    "recipient_id": "27820001001",
+                    "status": "read",
+                    "timestamp": "123456789",
+                }
+            ]
+        }
+    )
+    response = await test_client.post(
+        app.url_for("whatsapp.whatsapp_webhook"),
+        headers={"X-Turn-Hook-Signature": generate_hmac_signature(data, "testsecret")},
+        data=data,
+    )
+    assert response.status == 200
+    assert (await response.json()) == {}
+
+    message = await get_amqp_message(queue)
+    event = Event.from_json(message.body.decode("utf-8"))
+    assert event.user_message_id == "abc123"
+    assert event.sent_message_id == "abc123"
+    assert event.event_type == Event.EVENT_TYPE.DELIVERY_REPORT
+    assert event.delivery_status == Event.DELIVERY_STATUS.DELIVERED
+    assert event.timestamp == datetime(1973, 11, 29, 21, 33, 9, tzinfo=timezone.utc)
+    assert event.helper_metadata == {"recipient_id": "27820001001", "status": "read"}
