@@ -5,6 +5,11 @@ on: [pull_request]
 jobs:
   test:
     runs-on: ubuntu-latest
+    services:
+      rabbitmq:
+        image: rabbitmq:3.8
+        ports:
+          - 5672:5672
     steps:
       - uses: actions/checkout@v2
       - uses: actions/setup-python@v2

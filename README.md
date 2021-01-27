@@ -9,6 +9,9 @@ management. Once poetry is installed, install dependancies by running
 poetry install
 ```
 
+You will also need an AMQP broker like rabbitmq installed and running to run the local
+server, or to run tests.
+
 To run a local server, run
 ```bash
 poetry run sanic --debug --access vxwhatsapp.main.app
@@ -20,6 +23,11 @@ poetry run black .
 poetry run isort .
 poetry run mypy .
 poetry run flake8
+```
+
+To run the tests, run
+```bash
+poetry run pytest
 ```
 
 ## Configuration
