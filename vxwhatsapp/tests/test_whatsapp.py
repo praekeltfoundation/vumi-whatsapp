@@ -1,11 +1,15 @@
 import hmac
 import json
 from base64 import b64encode
+from datetime import datetime, timezone
 from hashlib import sha256
 
 import pytest
+from aio_pika import Connection, Queue
+from aio_pika.exceptions import QueueEmpty
 
 from vxwhatsapp.main import app
+from vxwhatsapp.models import Message
 from vxwhatsapp.whatsapp import config
 
 
@@ -59,7 +63,22 @@ async def test_valid_signature(test_client):
     }
 
 
-async def test_valid_body(test_client):
+async def setup_amqp_queue(connection: Connection):
+    channel = await connection.channel()
+    queue = await channel.declare_queue("whatsapp.inbound", auto_delete=True)
+    await queue.bind("vumi")
+    return queue
+
+
+async def get_amqp_message(queue: Queue):
+    message = await queue.get(timeout=1)
+    assert message is not None
+    await message.ack()
+    return message
+
+
+async def test_valid_text_message(test_client):
+    queue = await setup_amqp_queue(test_client.app.amqp_connection)
     config.HMAC_SECRET = "testsecret"
     data = json.dumps(
         {
@@ -81,3 +100,144 @@ async def test_valid_body(test_client):
     )
     assert response.status == 200
     assert (await response.json()) == {}
+
+    message = await get_amqp_message(queue)
+    message = Message.from_json(message.body.decode("utf-8"))
+    assert message.from_addr == "27820001001"
+    assert message.content == "test message"
+    assert message.message_id == "abc123"
+    assert message.timestamp == datetime(1973, 11, 29, 21, 33, 9, tzinfo=timezone.utc)
+    assert message.transport_metadata == {"contacts": None, "message": {"type": "text"}}
+
+
+async def test_ignore_system_messages(test_client):
+    queue = await setup_amqp_queue(test_client.app.amqp_connection)
+    config.HMAC_SECRET = "testsecret"
+    data = json.dumps(
+        {
+            "messages": [
+                {
+                    "from": "27820001001",
+                    "id": "abc123",
+                    "timestamp": "123456789",
+                    "type": "system",
+                    "system": {"body": "test message"},
+                }
+            ]
+        }
+    )
+    response = await test_client.post(
+        app.url_for("whatsapp.whatsapp_webhook"),
+        headers={"X-Turn-Hook-Signature": generate_hmac_signature(data, "testsecret")},
+        data=data,
+    )
+    assert response.status == 200
+    assert (await response.json()) == {}
+
+    exception = None
+    try:
+        await get_amqp_message(queue)
+    except QueueEmpty as e:
+        exception = e
+    assert exception is not None
+
+
+async def test_valid_location_message(test_client):
+    """
+    Should put the name of the location as the message content
+    """
+    queue = await setup_amqp_queue(test_client.app.amqp_connection)
+    config.HMAC_SECRET = "testsecret"
+    data = json.dumps(
+        {
+            "messages": [
+                {
+                    "from": "27820001001",
+                    "id": "abc123",
+                    "timestamp": "123456789",
+                    "type": "location",
+                    "location": {"name": "test location"},
+                }
+            ]
+        }
+    )
+    response = await test_client.post(
+        app.url_for("whatsapp.whatsapp_webhook"),
+        headers={"X-Turn-Hook-Signature": generate_hmac_signature(data, "testsecret")},
+        data=data,
+    )
+    assert response.status == 200
+    assert (await response.json()) == {}
+
+    message = await get_amqp_message(queue)
+    message = Message.from_json(message.body.decode("utf-8"))
+    assert message.content == "test location"
+
+
+async def test_valid_button_message(test_client):
+    """
+    Should put the button response as the message content
+    """
+    queue = await setup_amqp_queue(test_client.app.amqp_connection)
+    config.HMAC_SECRET = "testsecret"
+    data = json.dumps(
+        {
+            "messages": [
+                {
+                    "from": "27820001001",
+                    "id": "abc123",
+                    "timestamp": "123456789",
+                    "type": "button",
+                    "button": {"text": "test response"},
+                }
+            ]
+        }
+    )
+    response = await test_client.post(
+        app.url_for("whatsapp.whatsapp_webhook"),
+        headers={"X-Turn-Hook-Signature": generate_hmac_signature(data, "testsecret")},
+        data=data,
+    )
+    assert response.status == 200
+    assert (await response.json()) == {}
+
+    message = await get_amqp_message(queue)
+    message = Message.from_json(message.body.decode("utf-8"))
+    assert message.content == "test response"
+
+
+async def test_valid_media_message(test_client):
+    """
+    Should put the media caption as the message content
+    """
+    queue = await setup_amqp_queue(test_client.app.amqp_connection)
+    config.HMAC_SECRET = "testsecret"
+    data = json.dumps(
+        {
+            "messages": [
+                {
+                    "from": "27820001001",
+                    "id": "abc123",
+                    "timestamp": "123456789",
+                    "type": "image",
+                    "image": {
+                        "id": "abc123",
+                        "caption": "test caption",
+                        "mime_type": "image/png",
+                        "sha256": "hash",
+                    },
+                }
+            ]
+        }
+    )
+    response = await test_client.post(
+        app.url_for("whatsapp.whatsapp_webhook"),
+        headers={"X-Turn-Hook-Signature": generate_hmac_signature(data, "testsecret")},
+        data=data,
+    )
+    assert response.status == 200
+    assert (await response.json()) == {}
+
+    message = await get_amqp_message(queue)
+    message = Message.from_json(message.body.decode("utf-8"))
+    assert message.content == "test caption"
