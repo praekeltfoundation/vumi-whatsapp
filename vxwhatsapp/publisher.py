@@ -1,5 +1,6 @@
 from aio_pika import Connection, DeliveryMode, ExchangeType
 from aio_pika import Message as AMQPMessage
+from sanic.log import logger
 
 from vxwhatsapp import config
 from vxwhatsapp.models import Event, Message
@@ -16,6 +17,7 @@ class Publisher:
         )
 
     async def publish_message(self, message: Message):
+        logger.debug(f"Publishing inbound message {message}")
         await self.exchange.publish(
             AMQPMessage(
                 message.to_json().encode("utf-8"),
@@ -28,6 +30,7 @@ class Publisher:
         )
 
     async def publish_event(self, event: Event):
+        logger.debug(f"Publishing inbound event {event}")
         await self.exchange.publish(
             AMQPMessage(
                 event.to_json().encode("utf-8"),

@@ -78,8 +78,10 @@ class Message:
         data["timestamp"] = format_timestamp(data["timestamp"])
         data["transport_type"] = data["transport_type"].value
         data["session_event"] = data["session_event"].value
-        data["to_addr_type"] = data["to_addr_type"].value
-        data["from_addr_type"] = data["from_addr_type"].value
+        if data.get("to_addr_type"):
+            data["to_addr_type"] = data["to_addr_type"].value
+        if data.get("from_addr_type"):
+            data["from_addr_type"] = data["from_addr_type"].value
         return ujson.dumps(data)
 
     @classmethod
@@ -139,7 +141,8 @@ class Event:
         data = asdict(self)
         data["timestamp"] = format_timestamp(data["timestamp"])
         data["event_type"] = data["event_type"].value
-        data["delivery_status"] = data["delivery_status"].value
+        if data.get("delivery_status"):
+            data["delivery_status"] = data["delivery_status"].value
         return ujson.dumps(data)
 
     @classmethod

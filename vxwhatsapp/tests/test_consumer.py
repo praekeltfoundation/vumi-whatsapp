@@ -1,0 +1,83 @@
+import logging
+from asyncio import Future
+from io import StringIO
+
+import pytest
+from aio_pika import Connection, DeliveryMode, ExchangeType
+from aio_pika import Message as AMQPMessage
+from sanic import Sanic
+from sanic.log import logger
+from sanic.response import json
+
+from vxwhatsapp.main import app
+from vxwhatsapp.models import Message
+
+
+@pytest.fixture
+def test_client(loop, sanic_client):
+    return loop.run_until_complete(sanic_client(app))
+
+
+@pytest.fixture
+def whatsapp_mock_server(loop, sanic_client):
+    app = Sanic("mock_whatsapp")
+    app.future = Future()
+
+    @app.route("/v1/messages", methods=["POST"])
+    async def messages(request):
+        app.future.set_result(request)
+        return json({})
+
+    return loop.run_until_complete(sanic_client(app))
+
+
+async def send_outbound_amqp_message(connection: Connection, message: bytes):
+    channel = await connection.channel()
+    exchange = await channel.declare_exchange(
+        "vumi", type=ExchangeType.DIRECT, durable=True, auto_delete=False
+    )
+    await exchange.publish(
+        AMQPMessage(
+            message,
+            delivery_mode=DeliveryMode.PERSISTENT,
+            content_type="application/json",
+            content_encoding="UTF-8",
+        ),
+        routing_key="whatsapp.outbound",
+    )
+
+
+async def send_outbound_message(connection: Connection, message: Message):
+    await send_outbound_amqp_message(connection, message.to_json().encode("utf-8"))
+
+
+async def test_outbound_text_message(whatsapp_mock_server, test_client):
+    """
+    Should make a request to the whatsapp API
+    """
+    test_client.app.consumer.message_url = (
+        f"http://{whatsapp_mock_server.host}:{whatsapp_mock_server.port}/v1/messages"
+    )
+    await send_outbound_message(
+        test_client.app.amqp_connection,
+        Message(
+            to_addr="27820001001",
+            from_addr="27820001002",
+            transport_name="whatsapp",
+            transport_type=Message.TRANSPORT_TYPE.HTTP_API,
+            content="test message",
+        ),
+    )
+    request = await whatsapp_mock_server.app.future
+    assert request.json == {"text": {"body": "test message"}, "to": "27820001001"}
+
+
+async def test_invalid_outbound_text_message(test_client):
+    """
+    If the AMQP message is invalid, then drop it
+    """
+    log_stream = StringIO()
+    logger.addHandler(logging.StreamHandler(log_stream))
+    await send_outbound_amqp_message(test_client.app.amqp_connection, b"invalid")
+    assert "Invalid message body b'invalid'" in log_stream.getvalue()
+    assert "ValueError" in log_stream.getvalue()

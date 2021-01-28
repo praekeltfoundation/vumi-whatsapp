@@ -8,6 +8,7 @@ from sanic.response import HTTPResponse, json, raw
 from sentry_sdk.integrations.sanic import SanicIntegration
 
 from vxwhatsapp import config
+from vxwhatsapp.consumer import Consumer
 from vxwhatsapp.metrics import setup_metrics_middleware
 from vxwhatsapp.publisher import Publisher
 from vxwhatsapp.whatsapp import bp as whatsapp_blueprint
@@ -25,11 +26,14 @@ async def setup_amqp(app, loop):
     app.amqp_connection = await aio_pika.connect_robust(config.AMQP_URL, loop=loop)
     app.publisher = Publisher(app.amqp_connection)
     await app.publisher.setup()
+    app.consumer = Consumer(app.amqp_connection)
+    await app.consumer.setup()
 
 
 @app.listener("after_server_stop")
 async def shutdown_amqp(app, loop):
     await app.amqp_connection.close()
+    await app.consumer.teardown()
 
 
 @app.route("/")

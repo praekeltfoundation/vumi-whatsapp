@@ -48,3 +48,13 @@ from the message broker. Defaults to `whatsapp`
 
 `PUBLISH_TIMEOUT` - The maximum amount of time to wait in seconds when publishing a
 message to the message broker. Defaults to 10 seconds
+
+`CONCURRENCY` - The number of parallel requests to make back to the WhatsApp API for
+outbound messages to the user.
+
+`CONSUME_TIMEOUT` - The timeout in seconds for submitting outbound messages to the
+whatsapp API. Defaults to 10 seconds
+
+`API_HOST` - The host to connect to for the WhatsApp API. Defaults to whatsapp.turn.io
+
+`API_TOKEN` - The auth token to use for the WhatsApp API.
