@@ -72,9 +72,9 @@ class Consumer:
 
         async with message.process(requeue=True):
             logger.debug(f"Processing outbound message {msg}")
-            await self.submit_message(msg)
+            with whatsapp_message_send.time():
+                await self.submit_message(msg)
 
-    @whatsapp_message_send.time()
     async def submit_message(self, message: Message):
         # TODO: support more message types
         await self.session.post(
