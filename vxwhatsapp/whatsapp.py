@@ -41,7 +41,7 @@ async def whatsapp_webhook(request: Request) -> HTTPResponse:
             content=content,
             in_reply_to=msg.get("context", {}).pop("id", None),
             transport_name=config.TRANSPORT_NAME,
-            transport_type=Message.TRANSPORT_TYPE.WHATSAPP,
+            transport_type=Message.TRANSPORT_TYPE.HTTP_API,
             timestamp=timestamp,
             message_id=msg.pop("id"),
             to_addr_type=Message.ADDRESS_TYPE.MSISDN,

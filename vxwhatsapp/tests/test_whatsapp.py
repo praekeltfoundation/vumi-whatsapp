@@ -1,10 +1,10 @@
 import hmac
-import json
 from base64 import b64encode
 from datetime import datetime, timezone
 from hashlib import sha256
 
 import pytest
+import ujson
 from aio_pika import Connection, Queue
 from aio_pika.exceptions import QueueEmpty
 
@@ -40,7 +40,7 @@ async def test_invalid_signature(test_client):
 
 async def test_valid_signature(test_client):
     config.HMAC_SECRET = "testsecret"
-    data = json.dumps(
+    data = ujson.dumps(
         {
             "messages": [
                 {
@@ -66,7 +66,7 @@ async def test_valid_signature(test_client):
 async def setup_amqp_queue(connection: Connection, queuename="whatsapp.inbound"):
     channel = await connection.channel()
     queue = await channel.declare_queue(queuename, auto_delete=True)
-    await queue.bind("vumi")
+    await queue.bind("vumi", queuename)
     return queue
 
 
@@ -80,7 +80,7 @@ async def get_amqp_message(queue: Queue):
 async def test_valid_text_message(test_client):
     queue = await setup_amqp_queue(test_client.app.amqp_connection)
     config.HMAC_SECRET = "testsecret"
-    data = json.dumps(
+    data = ujson.dumps(
         {
             "messages": [
                 {
@@ -113,7 +113,7 @@ async def test_valid_text_message(test_client):
 async def test_ignore_system_messages(test_client):
     queue = await setup_amqp_queue(test_client.app.amqp_connection)
     config.HMAC_SECRET = "testsecret"
-    data = json.dumps(
+    data = ujson.dumps(
         {
             "messages": [
                 {
@@ -148,7 +148,7 @@ async def test_valid_location_message(test_client):
     """
     queue = await setup_amqp_queue(test_client.app.amqp_connection)
     config.HMAC_SECRET = "testsecret"
-    data = json.dumps(
+    data = ujson.dumps(
         {
             "messages": [
                 {
@@ -180,7 +180,7 @@ async def test_valid_button_message(test_client):
     """
     queue = await setup_amqp_queue(test_client.app.amqp_connection)
     config.HMAC_SECRET = "testsecret"
-    data = json.dumps(
+    data = ujson.dumps(
         {
             "messages": [
                 {
@@ -212,7 +212,7 @@ async def test_valid_media_message(test_client):
     """
     queue = await setup_amqp_queue(test_client.app.amqp_connection)
     config.HMAC_SECRET = "testsecret"
-    data = json.dumps(
+    data = ujson.dumps(
         {
             "messages": [
                 {
@@ -246,7 +246,7 @@ async def test_valid_media_message(test_client):
 async def test_valid_event(test_client):
     queue = await setup_amqp_queue(test_client.app.amqp_connection, "whatsapp.event")
     config.HMAC_SECRET = "testsecret"
-    data = json.dumps(
+    data = ujson.dumps(
         {
             "statuses": [
                 {

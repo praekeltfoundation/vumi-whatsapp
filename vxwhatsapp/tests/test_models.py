@@ -9,7 +9,7 @@ def test_message_serialisation():
         to_addr="27820001001",
         from_addr="27820001002",
         transport_name="whatsapp",
-        transport_type=Message.TRANSPORT_TYPE.WHATSAPP,
+        transport_type=Message.TRANSPORT_TYPE.HTTP_API,
         in_reply_to="original-message-id",
         session_event=Message.SESSION_EVENT.NEW,
         content="message content",
