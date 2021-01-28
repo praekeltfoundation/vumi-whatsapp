@@ -53,7 +53,7 @@ class Message:
         CLOSE = "close"
 
     class TRANSPORT_TYPE(Enum):
-        WHATSAPP = "whatsapp"
+        HTTP_API = "http_api"
 
     class ADDRESS_TYPE(Enum):
         MSISDN = "msisdn"
