@@ -1,9 +1,10 @@
-import json
 from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
 from enum import Enum
 from typing import Optional
 from uuid import uuid4
+
+import ujson
 
 VUMI_DATE_FORMAT = "%Y-%m-%d %H:%M:%S.%f"
 _VUMI_DATE_FORMAT_NO_MICROSECONDS = "%Y-%m-%d %H:%M:%S"
@@ -33,15 +34,6 @@ def date_time_decoder(json_object):
         except (ValueError, TypeError):
             continue
     return json_object
-
-
-class JSONMessageEncoder(json.JSONEncoder):
-    def default(self, obj):
-        if isinstance(obj, datetime):
-            return format_timestamp(obj)
-        if isinstance(obj, Enum):
-            return obj.value
-        return super().default(obj)
 
 
 @dataclass
@@ -82,7 +74,13 @@ class Message:
         Converts the message to JSON representation for serialisation over the message
         broker
         """
-        return json.dumps(asdict(self), cls=JSONMessageEncoder, separators=(",", ":"))
+        data = asdict(self)
+        data["timestamp"] = format_timestamp(data["timestamp"])
+        data["transport_type"] = data["transport_type"].value
+        data["session_event"] = data["session_event"].value
+        data["to_addr_type"] = data["to_addr_type"].value
+        data["from_addr_type"] = data["from_addr_type"].value
+        return ujson.dumps(data)
 
     @classmethod
     def from_json(cls, json_string):
@@ -90,7 +88,8 @@ class Message:
         Takes a serialised message from the message broker, and converts into a message
         object
         """
-        data = json.loads(json_string, object_hook=date_time_decoder)
+        data = ujson.loads(json_string)
+        data = date_time_decoder(data)
         data["transport_type"] = cls.TRANSPORT_TYPE(data["transport_type"])
         data["session_event"] = cls.SESSION_EVENT(data["session_event"])
         if data.get("to_addr_type"):
@@ -137,7 +136,11 @@ class Event:
         Converts the event to JSON representation for serialisation over the message
         broker
         """
-        return json.dumps(asdict(self), cls=JSONMessageEncoder, separators=(",", ":"))
+        data = asdict(self)
+        data["timestamp"] = format_timestamp(data["timestamp"])
+        data["event_type"] = data["event_type"].value
+        data["delivery_status"] = data["delivery_status"].value
+        return ujson.dumps(data)
 
     @classmethod
     def from_json(cls, json_string):
@@ -145,7 +148,8 @@ class Event:
         Takes a serialised event from the message broker, and converts into an event
         object
         """
-        data = json.loads(json_string, object_hook=date_time_decoder)
+        data = ujson.loads(json_string)
+        data = date_time_decoder(data)
         data["event_type"] = cls.EVENT_TYPE(data["event_type"])
         if data.get("delivery_status"):
             data["delivery_status"] = cls.DELIVERY_STATUS(data["delivery_status"])
