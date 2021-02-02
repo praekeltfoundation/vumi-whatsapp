@@ -22,7 +22,8 @@ def setup_metrics_middleware(app: Sanic) -> None:
 
     @app.middleware("response")
     async def before_response(request, response):
-        if request.path != "/metrics" and request.method != "OPTIONS":
+        start_time = getattr(request.ctx, "start_time", None)
+        if start_time:
             RQS_LATENCY.labels(request.method, request.path, response.status).observe(
                 time.time() - request.ctx.start_time
             )
