@@ -1,0 +1,13 @@
+services:
+  web:
+    build: .
+    ports:
+      - "8000:8000"
+    links:
+      - rabbitmq
+    environment:
+      - AMQP_URL=amqp://guest:guest@rabbitmq/
+    restart: always
+  rabbitmq:
+    image: rabbitmq:3.8
+    restart: always
