@@ -15,6 +15,8 @@ from vxwhatsapp.whatsapp import config
 
 @pytest.fixture
 def test_client(loop, sanic_client):
+    config.REDIS_URL = config.REDIS_URL or "redis://"
+    config.HMAC_SECRET = "testsecret"
     return loop.run_until_complete(sanic_client(app))
 
 
@@ -24,13 +26,11 @@ def generate_hmac_signature(body: str, secret: str) -> str:
 
 
 async def test_missing_signature(test_client):
-    config.HMAC_SECRET = "testsecret"
     response = await test_client.post(app.url_for("whatsapp.whatsapp_webhook"))
     assert response.status == 401
 
 
 async def test_invalid_signature(test_client):
-    config.HMAC_SECRET = "testsecret"
     response = await test_client.post(
         app.url_for("whatsapp.whatsapp_webhook"),
         headers={"X-Turn-Hook-Signature": "incorrect"},
@@ -39,7 +39,6 @@ async def test_invalid_signature(test_client):
 
 
 async def test_valid_signature(test_client):
-    config.HMAC_SECRET = "testsecret"
     data = ujson.dumps(
         {
             "messages": [
@@ -79,7 +78,6 @@ async def get_amqp_message(queue: Queue):
 
 async def test_valid_text_message(test_client):
     queue = await setup_amqp_queue(test_client.app.amqp_connection)
-    config.HMAC_SECRET = "testsecret"
     data = ujson.dumps(
         {
             "messages": [
@@ -117,9 +115,40 @@ async def test_valid_text_message(test_client):
     }
 
 
+async def test_text_message_conversation_claim_redis(test_client):
+    queue = await setup_amqp_queue(test_client.app.amqp_connection)
+    data = ujson.dumps(
+        {
+            "messages": [
+                {
+                    "from": "27820001001",
+                    "id": "abc123",
+                    "timestamp": "123456789",
+                    "type": "text",
+                    "text": {"body": "test message"},
+                }
+            ]
+        }
+    )
+    response = await test_client.post(
+        app.url_for("whatsapp.whatsapp_webhook"),
+        headers={
+            "X-Turn-Hook-Signature": generate_hmac_signature(data, "testsecret"),
+            "X-Turn-Claim": "test-claim",
+        },
+        data=data,
+    )
+    assert response.status == 200
+    assert (await response.json()) == {}
+
+    await get_amqp_message(queue)
+    [address] = await test_client.app.redis.zrange("claims")
+    assert address == "27820001001"
+    await test_client.app.redis.delete("claims")
+
+
 async def test_ignore_system_messages(test_client):
     queue = await setup_amqp_queue(test_client.app.amqp_connection)
-    config.HMAC_SECRET = "testsecret"
     data = ujson.dumps(
         {
             "messages": [
@@ -154,7 +183,6 @@ async def test_valid_location_message(test_client):
     Should put the name of the location as the message content
     """
     queue = await setup_amqp_queue(test_client.app.amqp_connection)
-    config.HMAC_SECRET = "testsecret"
     data = ujson.dumps(
         {
             "messages": [
@@ -186,7 +214,6 @@ async def test_valid_button_message(test_client):
     Should put the button response as the message content
     """
     queue = await setup_amqp_queue(test_client.app.amqp_connection)
-    config.HMAC_SECRET = "testsecret"
     data = ujson.dumps(
         {
             "messages": [
@@ -218,7 +245,6 @@ async def test_valid_media_message(test_client):
     Should put the media caption as the message content
     """
     queue = await setup_amqp_queue(test_client.app.amqp_connection)
-    config.HMAC_SECRET = "testsecret"
     data = ujson.dumps(
         {
             "messages": [
@@ -252,7 +278,6 @@ async def test_valid_media_message(test_client):
 
 async def test_valid_event(test_client):
     queue = await setup_amqp_queue(test_client.app.amqp_connection, "whatsapp.event")
-    config.HMAC_SECRET = "testsecret"
     data = ujson.dumps(
         {
             "statuses": [

@@ -58,3 +58,6 @@ whatsapp API. Defaults to 10 seconds
 `API_HOST` - The host to connect to for the WhatsApp API. Defaults to whatsapp.turn.io
 
 `API_TOKEN` - The auth token to use for the WhatsApp API.
+
+`REDIS_URL` - The URL to use to connect to Redis. Optional. If supplied, enables Turn
+conversation claim expiry messages.

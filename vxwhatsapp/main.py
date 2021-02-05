@@ -1,4 +1,5 @@
 import aio_pika
+import aioredis
 import sentry_sdk
 from prometheus_client import CONTENT_TYPE_LATEST
 from prometheus_client.exposition import generate_latest
@@ -34,6 +35,21 @@ async def setup_amqp(app, loop):
 async def shutdown_amqp(app, loop):
     await app.amqp_connection.close()
     await app.consumer.teardown()
+
+
+@app.listener("before_server_start")
+async def setup_redis(app, loop):
+    if not config.REDIS_URL:
+        app.redis = None
+        return
+    app.redis = await aioredis.create_redis_pool(config.REDIS_URL, encoding="utf8")
+
+
+@app.listener("after_server_stop")
+async def shutdown_redis(app, loop):
+    if app.redis:
+        app.redis.close()
+        await app.redis.wait_closed()
 
 
 @app.route("/")

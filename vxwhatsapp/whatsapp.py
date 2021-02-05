@@ -1,3 +1,4 @@
+import time
 from asyncio import gather
 from datetime import datetime, timezone
 
@@ -53,6 +54,7 @@ async def whatsapp_webhook(request: Request) -> HTTPResponse:
             },
         )
         tasks.append(request.app.publisher.publish_message(message))
+        tasks.append(store_conversation_claim(request, message))
 
     for ev in request.json.get("statuses", []):
         message_id = ev.pop("id")
@@ -89,3 +91,17 @@ async def whatsapp_webhook(request: Request) -> HTTPResponse:
 
     await gather(*tasks)
     return json({})
+
+
+async def store_conversation_claim(request: Request, message: Message) -> None:
+    if not (redis := request.app.redis):
+        return
+
+    if not request.headers.get("X-Turn-Claim"):
+        return
+
+    now = int(time.monotonic())
+    # We actually only need the user address to send the session expiry message, so
+    # instead of storing the claim ID, and then storing the message in another key,
+    # just store the user address
+    await redis.zadd("claims", now, message.from_addr)
