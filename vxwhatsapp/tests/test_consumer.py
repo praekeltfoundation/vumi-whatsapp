@@ -20,11 +20,17 @@ def test_client(loop, sanic_client):
 
 @pytest.fixture
 def whatsapp_mock_server(loop, sanic_client):
+    Sanic.test_mode = True
     app = Sanic("mock_whatsapp")
     app.future = Future()
 
     @app.route("/v1/messages", methods=["POST"])
     async def messages(request):
+        app.future.set_result(request)
+        return json({})
+
+    @app.route("/v1/messages/<message_id>/automation", methods=["POST"])
+    async def message_automation(request, message_id):
         app.future.set_result(request)
         return json({})
 
@@ -53,7 +59,7 @@ async def send_outbound_message(connection: Connection, message: Message):
 
 async def test_outbound_text_message(whatsapp_mock_server, test_client):
     """
-    Should make a request to the whatsapp API
+    Should make a request to the whatsapp API, extending the conversation claim
     """
     test_client.app.consumer.message_url = (
         f"http://{whatsapp_mock_server.host}:{whatsapp_mock_server.port}/v1/messages"
@@ -65,11 +71,64 @@ async def test_outbound_text_message(whatsapp_mock_server, test_client):
             from_addr="27820001002",
             transport_name="whatsapp",
             transport_type=Message.TRANSPORT_TYPE.HTTP_API,
+            transport_metadata={"claim": "test-claim"},
             content="test message",
         ),
     )
     request = await whatsapp_mock_server.app.future
     assert request.json == {"text": {"body": "test message"}, "to": "27820001001"}
+    assert request.headers["X-Turn-Claim-Extend"] == "test-claim"
+
+
+async def test_outbound_text_end_session(whatsapp_mock_server, test_client):
+    """
+    Should make a request to the whatsapp API, releasing the conversation claim
+    """
+    test_client.app.consumer.message_url = (
+        f"http://{whatsapp_mock_server.host}:{whatsapp_mock_server.port}/v1/messages"
+    )
+    await send_outbound_message(
+        test_client.app.amqp_connection,
+        Message(
+            to_addr="27820001001",
+            from_addr="27820001002",
+            transport_name="whatsapp",
+            transport_type=Message.TRANSPORT_TYPE.HTTP_API,
+            transport_metadata={"claim": "test-claim"},
+            content="test message",
+            session_event=Message.SESSION_EVENT.CLOSE,
+        ),
+    )
+    request = await whatsapp_mock_server.app.future
+    assert request.json == {"text": {"body": "test message"}, "to": "27820001001"}
+    assert request.headers["X-Turn-Claim-Release"] == "test-claim"
+
+
+async def test_outbound_text_automation_handle(whatsapp_mock_server, test_client):
+    """
+    Should make a request to the turn automation API to reevaluate
+    """
+    test_client.app.consumer.message_automation_url = (
+        f"http://{whatsapp_mock_server.host}:{whatsapp_mock_server.port}"
+        "/v1/messages/{}/automation"
+    )
+    await send_outbound_message(
+        test_client.app.amqp_connection,
+        Message(
+            to_addr="27820001001",
+            from_addr="27820001002",
+            transport_name="whatsapp",
+            transport_type=Message.TRANSPORT_TYPE.HTTP_API,
+            transport_metadata={"claim": "test-claim", "automation_handle": True},
+            content="test message",
+            session_event=Message.SESSION_EVENT.CLOSE,
+            in_reply_to="message-id",
+        ),
+    )
+    request = await whatsapp_mock_server.app.future
+    assert request.json == {"text": {"body": "test message"}, "to": "27820001001"}
+    assert request.headers["X-Turn-Claim-Release"] == "test-claim"
+    assert "/v1/messages/message-id/automation" in request.url
 
 
 async def test_invalid_outbound_text_message(test_client):

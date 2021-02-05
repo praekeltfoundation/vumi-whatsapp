@@ -49,6 +49,7 @@ async def whatsapp_webhook(request: Request) -> HTTPResponse:
             transport_metadata={
                 "contacts": request.json.get("contacts"),
                 "message": msg,
+                "claim": request.headers.get("X-Turn-Claim"),
             },
         )
         tasks.append(request.app.publisher.publish_message(message))

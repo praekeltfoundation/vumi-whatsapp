@@ -1,4 +1,5 @@
 from json.decoder import JSONDecodeError
+from typing import Dict
 from urllib.parse import ParseResult, urlunparse
 
 import aiohttp
@@ -28,11 +29,16 @@ class Consumer:
             connector=aiohttp.TCPConnector(limit=config.CONCURRENCY),
             headers={"Authorization": f"Bearer {config.API_TOKEN}"},
         )
-        self.message_url = urlunparse(
+        self.api_host = config.API_HOST
+        self.message_url = self._make_url("/v1/messages")
+        self.message_automation_url = self._make_url("/v1/messages/{}/automation")
+
+    def _make_url(self, path):
+        return urlunparse(
             ParseResult(
                 scheme="https",
-                netloc=config.API_HOST,
-                path="/v1/messages",
+                netloc=self.api_host,
+                path=path,
                 params="",
                 query="",
                 fragment="",
@@ -77,7 +83,25 @@ class Consumer:
 
     async def submit_message(self, message: Message):
         # TODO: support more message types
+
+        headers: Dict[str, str] = {}
+        url = self.message_url
+        if claim := message.transport_metadata.get("claim"):
+            if (
+                message.session_event == Message.SESSION_EVENT.RESUME
+                or message.session_event == Message.SESSION_EVENT.NONE
+            ):
+                headers["X-Turn-Claim-Extend"] = claim
+            elif message.session_event == Message.SESSION_EVENT.CLOSE:
+                headers["X-Turn-Claim-Release"] = claim
+                if (
+                    message.transport_metadata.get("automation_handle")
+                    and message.in_reply_to
+                ):
+                    url = self.message_automation_url.format(message.in_reply_to)
+
         await self.session.post(
-            self.message_url,
+            url,
+            headers=headers,
             json={"to": message.to_addr, "text": {"body": message.content or ""}},
         )
