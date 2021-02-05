@@ -5,10 +5,12 @@ from urllib.parse import ParseResult, urlunparse
 import aiohttp
 import ujson
 from aio_pika import Connection, ExchangeType, IncomingMessage
+from aioredis import Redis
 from prometheus_client import Histogram
 from sanic.log import logger
 
 from vxwhatsapp import config
+from vxwhatsapp.claims import store_conversation_claim
 from vxwhatsapp.models import Message
 
 WHATSAPP_RQS_LATENCY = Histogram(
@@ -20,7 +22,8 @@ whatsapp_message_send = WHATSAPP_RQS_LATENCY.labels("/v1/messages")
 
 
 class Consumer:
-    def __init__(self, connection: Connection):
+    def __init__(self, connection: Connection, redis: Redis):
+        self.redis = redis
         self.connection = connection
         self.session = aiohttp.ClientSession(
             json_serialize=ujson.dumps,
@@ -92,6 +95,7 @@ class Consumer:
                 or message.session_event == Message.SESSION_EVENT.NONE
             ):
                 headers["X-Turn-Claim-Extend"] = claim
+                await store_conversation_claim(self.redis, claim, message.to_addr)
             elif message.session_event == Message.SESSION_EVENT.CLOSE:
                 headers["X-Turn-Claim-Release"] = claim
                 if (

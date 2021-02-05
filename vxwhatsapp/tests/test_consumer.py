@@ -9,12 +9,14 @@ from sanic import Sanic
 from sanic.log import logger
 from sanic.response import json
 
+from vxwhatsapp import config
 from vxwhatsapp.main import app
 from vxwhatsapp.models import Message
 
 
 @pytest.fixture
 def test_client(loop, sanic_client):
+    config.REDIS_URL = config.REDIS_URL or "redis://"
     return loop.run_until_complete(sanic_client(app))
 
 
@@ -78,6 +80,9 @@ async def test_outbound_text_message(whatsapp_mock_server, test_client):
     request = await whatsapp_mock_server.app.future
     assert request.json == {"text": {"body": "test message"}, "to": "27820001001"}
     assert request.headers["X-Turn-Claim-Extend"] == "test-claim"
+
+    [addr] = await test_client.app.redis.zrange("claims")
+    assert addr == "27820001001"
 
 
 async def test_outbound_text_end_session(whatsapp_mock_server, test_client):
