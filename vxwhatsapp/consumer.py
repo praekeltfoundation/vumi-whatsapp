@@ -1,4 +1,5 @@
 from json.decoder import JSONDecodeError
+from typing import Dict
 from urllib.parse import ParseResult, urlunparse
 
 import aiohttp
@@ -77,7 +78,19 @@ class Consumer:
 
     async def submit_message(self, message: Message):
         # TODO: support more message types
+
+        headers: Dict[str, str] = {}
+        if claim := message.transport_metadata.get("claim"):
+            if (
+                message.session_event == Message.SESSION_EVENT.RESUME
+                or message.session_event == Message.SESSION_EVENT.NONE
+            ):
+                headers["X-Turn-Claim-Extend"] = claim
+            elif message.session_event == Message.SESSION_EVENT.CLOSE:
+                headers["X-Turn-Claim-Release"] = claim
+
         await self.session.post(
             self.message_url,
+            headers=headers,
             json={"to": message.to_addr, "text": {"body": message.content or ""}},
         )
