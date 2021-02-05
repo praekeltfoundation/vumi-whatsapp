@@ -65,7 +65,7 @@ async def test_valid_signature(test_client):
 
 async def setup_amqp_queue(connection: Connection, queuename="whatsapp.inbound"):
     channel = await connection.channel()
-    queue = await channel.declare_queue(queuename, auto_delete=True)
+    queue = await channel.declare_queue(queuename, auto_delete=True, passive=True)
     await queue.bind("vumi", queuename)
     return queue
 
@@ -95,7 +95,10 @@ async def test_valid_text_message(test_client):
     )
     response = await test_client.post(
         app.url_for("whatsapp.whatsapp_webhook"),
-        headers={"X-Turn-Hook-Signature": generate_hmac_signature(data, "testsecret")},
+        headers={
+            "X-Turn-Hook-Signature": generate_hmac_signature(data, "testsecret"),
+            "X-Turn-Claim": "test-claim",
+        },
         data=data,
     )
     assert response.status == 200
@@ -107,7 +110,11 @@ async def test_valid_text_message(test_client):
     assert message.content == "test message"
     assert message.message_id == "abc123"
     assert message.timestamp == datetime(1973, 11, 29, 21, 33, 9, tzinfo=timezone.utc)
-    assert message.transport_metadata == {"contacts": None, "message": {"type": "text"}}
+    assert message.transport_metadata == {
+        "contacts": None,
+        "message": {"type": "text"},
+        "claim": "test-claim",
+    }
 
 
 async def test_ignore_system_messages(test_client):
