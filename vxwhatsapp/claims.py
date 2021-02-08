@@ -18,3 +18,11 @@ async def store_conversation_claim(
     # instead of storing the claim ID, and then storing the message in another key,
     # just store the user address
     await redis.zadd("claims", now, address)
+
+
+async def delete_conversation_claim(
+    redis: Optional[Redis], claim: Optional[str], address: str
+):
+    if not redis or not claim:
+        return
+    await redis.zrem("claims", address)
