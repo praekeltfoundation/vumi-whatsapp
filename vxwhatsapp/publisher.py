@@ -66,6 +66,7 @@ class Publisher:
         transaction.zrangebyscore("claims", max=timestamp)
         transaction.zremrangebyscore("claims", max=timestamp)
         addresses, _ = await transaction.execute()
+        tasks = []
         for address in addresses:
             msg = Message(
                 to_addr=config.WHATSAPP_NUMBER,
@@ -76,4 +77,5 @@ class Publisher:
                 to_addr_type=Message.ADDRESS_TYPE.MSISDN,
                 from_addr_type=Message.ADDRESS_TYPE.MSISDN,
             )
-            await self.publish_message(msg)
+            tasks.append(self.publish_message(msg))
+        await asyncio.gather(*tasks)
