@@ -38,6 +38,15 @@ async def test_invalid_signature(test_client):
     assert response.status == 403
 
 
+async def test_no_secret_config(test_client):
+    """
+    If no secret is configured, then skip auth check
+    """
+    config.HMAC_SECRET = None
+    response = await test_client.post(app.url_for("whatsapp.whatsapp_webhook"))
+    assert response.status == 400
+
+
 async def test_valid_signature(test_client):
     data = ujson.dumps(
         {

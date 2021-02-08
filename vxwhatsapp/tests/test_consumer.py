@@ -83,6 +83,7 @@ async def test_outbound_text_message(whatsapp_mock_server, test_client):
 
     [addr] = await test_client.app.redis.zrange("claims")
     assert addr == "27820001001"
+    await test_client.app.redis.delete("claims")
 
 
 async def test_outbound_text_end_session(whatsapp_mock_server, test_client):

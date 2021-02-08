@@ -1,11 +1,15 @@
 import pytest
 
 from vxwhatsapp.main import app
+from vxwhatsapp import config
 
 
 @pytest.fixture
 def test_client(loop, sanic_client):
-    return loop.run_until_complete(sanic_client(app))
+    redis = config.REDIS_URL
+    config.REDIS_URL = None
+    yield loop.run_until_complete(sanic_client(app))
+    config.REDIS_URL = redis
 
 
 async def test_health(test_client):

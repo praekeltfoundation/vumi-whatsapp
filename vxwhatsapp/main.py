@@ -14,7 +14,7 @@ from vxwhatsapp.metrics import setup_metrics_middleware
 from vxwhatsapp.publisher import Publisher
 from vxwhatsapp.whatsapp import bp as whatsapp_blueprint
 
-if config.SENTRY_DSN:
+if config.SENTRY_DSN:  # pragma: no cover
     sentry_sdk.init(dsn=config.SENTRY_DSN, integrations=[SanicIntegration()])
 
 app = Sanic("vxwhatsapp")

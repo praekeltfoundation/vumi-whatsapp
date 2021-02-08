@@ -13,7 +13,7 @@ async def store_conversation_claim(
     if not claim:
         return
 
-    now = int(time.monotonic())
+    now = int(time.time())
     # We actually only need the user address to send the session expiry message, so
     # instead of storing the claim ID, and then storing the message in another key,
     # just store the user address
