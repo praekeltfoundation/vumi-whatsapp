@@ -1,7 +1,7 @@
 from aioredis import create_redis_pool
 
 from vxwhatsapp import config
-from vxwhatsapp.claims import store_conversation_claim, delete_conversation_claim
+from vxwhatsapp.claims import delete_conversation_claim, store_conversation_claim
 
 
 async def test_store_missing_parameters():

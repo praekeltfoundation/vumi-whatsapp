@@ -1,7 +1,7 @@
 import logging
+import time
 from asyncio import Future
 from io import StringIO
-import time
 
 import pytest
 from aio_pika import Connection, DeliveryMode, ExchangeType

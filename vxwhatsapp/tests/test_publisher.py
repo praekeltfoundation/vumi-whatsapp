@@ -1,21 +1,26 @@
-import pytest
-from vxwhatsapp import config
-from aio_pika import connect_robust, Connection, Queue, Message as AMQPMessage
-from aioredis import create_redis_pool, Redis
-from vxwhatsapp.publisher import Publisher
-from vxwhatsapp.models import Message
 import time
+from typing import AsyncGenerator
+
+import pytest
+from aio_pika import Connection
+from aio_pika import Message as AMQPMessage
+from aio_pika import Queue, connect_robust
+from aioredis import Redis, create_redis_pool
+
+from vxwhatsapp import config
+from vxwhatsapp.models import Message
+from vxwhatsapp.publisher import Publisher
 
 
 @pytest.fixture
-async def amqp() -> Connection:
-    conn = await connect_robust(config.AMQP_URL)
+async def amqp() -> AsyncGenerator[Connection, None]:
+    conn: Connection = await connect_robust(config.AMQP_URL)
     yield conn
     await conn.close()
 
 
 @pytest.fixture
-async def redis() -> Redis:
+async def redis() -> AsyncGenerator[Redis, None]:
     conn = await create_redis_pool(config.REDIS_URL or "redis://", encoding="utf8")
     yield conn
     conn.close()

@@ -10,7 +10,7 @@ from prometheus_client import Histogram
 from sanic.log import logger
 
 from vxwhatsapp import config
-from vxwhatsapp.claims import store_conversation_claim, delete_conversation_claim
+from vxwhatsapp.claims import delete_conversation_claim, store_conversation_claim
 from vxwhatsapp.models import Message
 
 WHATSAPP_RQS_LATENCY = Histogram(
