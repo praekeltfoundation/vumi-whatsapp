@@ -40,7 +40,7 @@ async def shutdown_redis(app, loop):
 @app.listener("before_server_start")
 async def setup_amqp(app, loop):
     app.amqp_connection = await aio_pika.connect_robust(config.AMQP_URL, loop=loop)
-    app.publisher = Publisher(app.amqp_connection)
+    app.publisher = Publisher(app.amqp_connection, app.redis)
     await app.publisher.setup()
     app.consumer = Consumer(app.amqp_connection, app.redis)
     await app.consumer.setup()
@@ -50,6 +50,7 @@ async def setup_amqp(app, loop):
 async def shutdown_amqp(app, loop):
     await app.amqp_connection.close()
     await app.consumer.teardown()
+    await app.publisher.teardown()
 
 
 @app.route("/")

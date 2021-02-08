@@ -1,7 +1,7 @@
 import pytest
 
-from vxwhatsapp.main import app
 from vxwhatsapp import config
+from vxwhatsapp.main import app
 
 
 @pytest.fixture
