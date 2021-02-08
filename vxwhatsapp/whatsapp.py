@@ -7,6 +7,7 @@ from sanic.response import HTTPResponse, json
 
 from vxwhatsapp import config
 from vxwhatsapp.auth import validate_hmac
+from vxwhatsapp.claims import store_conversation_claim
 from vxwhatsapp.models import Event, Message
 from vxwhatsapp.schema import validate_schema, whatsapp_webhook_schema
 
@@ -53,6 +54,13 @@ async def whatsapp_webhook(request: Request) -> HTTPResponse:
             },
         )
         tasks.append(request.app.publisher.publish_message(message))
+        tasks.append(
+            store_conversation_claim(
+                request.app.redis,
+                request.headers.get("X-Turn-Claim"),
+                message.from_addr,
+            )
+        )
 
     for ev in request.json.get("statuses", []):
         message_id = ev.pop("id")

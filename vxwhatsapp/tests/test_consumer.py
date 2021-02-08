@@ -1,4 +1,5 @@
 import logging
+import time
 from asyncio import Future
 from io import StringIO
 
@@ -9,12 +10,14 @@ from sanic import Sanic
 from sanic.log import logger
 from sanic.response import json
 
+from vxwhatsapp import config
 from vxwhatsapp.main import app
 from vxwhatsapp.models import Message
 
 
 @pytest.fixture
 def test_client(loop, sanic_client):
+    config.REDIS_URL = config.REDIS_URL or "redis://"
     return loop.run_until_complete(sanic_client(app))
 
 
@@ -79,14 +82,21 @@ async def test_outbound_text_message(whatsapp_mock_server, test_client):
     assert request.json == {"text": {"body": "test message"}, "to": "27820001001"}
     assert request.headers["X-Turn-Claim-Extend"] == "test-claim"
 
+    [addr] = await test_client.app.redis.zrange("claims")
+    assert addr == "27820001001"
+    await test_client.app.redis.delete("claims")
+
 
 async def test_outbound_text_end_session(whatsapp_mock_server, test_client):
     """
-    Should make a request to the whatsapp API, releasing the conversation claim
+    Should make a request to the whatsapp API, releasing the conversation claim, and
+    removing it from the set of open conversations
     """
+    redis = test_client.app.redis
     test_client.app.consumer.message_url = (
         f"http://{whatsapp_mock_server.host}:{whatsapp_mock_server.port}/v1/messages"
     )
+    await redis.zadd("claims", int(time.time()), "27820001001")
     await send_outbound_message(
         test_client.app.amqp_connection,
         Message(
@@ -102,6 +112,9 @@ async def test_outbound_text_end_session(whatsapp_mock_server, test_client):
     request = await whatsapp_mock_server.app.future
     assert request.json == {"text": {"body": "test message"}, "to": "27820001001"}
     assert request.headers["X-Turn-Claim-Release"] == "test-claim"
+
+    assert await redis.zcount("claims") == 0
+    await redis.delete("claims")
 
 
 async def test_outbound_text_automation_handle(whatsapp_mock_server, test_client):
