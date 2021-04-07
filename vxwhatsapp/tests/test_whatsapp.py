@@ -73,7 +73,7 @@ async def test_valid_signature(test_client):
 
 async def setup_amqp_queue(connection: Connection, queuename="whatsapp.inbound"):
     channel = await connection.channel()
-    queue = await channel.declare_queue(queuename, auto_delete=True)
+    queue = await channel.declare_queue(queuename, durable=True)
     await queue.bind("vumi", queuename)
     return queue
 

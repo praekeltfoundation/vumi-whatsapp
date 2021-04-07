@@ -1,3 +1,5 @@
+import time
+
 import aio_pika
 import aioredis
 import sentry_sdk
@@ -55,7 +57,31 @@ async def shutdown_amqp(app, loop):
 
 @app.route("/")
 async def health(request: Request) -> HTTPResponse:
-    return json({"status": "ok"})
+    result: dict = {"status": "ok", "amqp": {}}
+
+    amqp_connection = app.amqp_connection  # type: ignore
+    if amqp_connection.connection is None:  # pragma: no cover
+        result["amqp"]["connection"] = False
+        result["status"] = "down"
+    else:
+        result["amqp"]["time_since_last_heartbeat"] = (
+            amqp_connection.loop.time() - amqp_connection.heartbeat_last
+        )
+        result["amqp"]["connection"] = True
+
+    redis = app.redis  # type: ignore
+    if redis:
+        result["redis"] = {}
+        try:
+            start = time.monotonic()
+            await redis.ping()
+            result["redis"]["response_time"] = time.monotonic() - start
+            result["redis"]["connection"] = True
+        except ConnectionError:  # pragma: no cover
+            result["status"] = "down"
+            result["redis"]["connection"] = False
+
+    return json(result, status=200 if result["status"] == "ok" else 500)
 
 
 @app.route("/metrics")

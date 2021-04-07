@@ -29,7 +29,7 @@ async def redis() -> AsyncGenerator[Redis, None]:
 
 async def setup_amqp_queue(amqp: Connection, queuename="whatsapp.inbound") -> Queue:
     channel = await amqp.channel()
-    queue = await channel.declare_queue(queuename, auto_delete=True)
+    queue = await channel.declare_queue(queuename, durable=True)
     await queue.bind("vumi", queuename)
     return queue
 
