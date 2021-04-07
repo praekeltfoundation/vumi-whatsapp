@@ -591,7 +591,7 @@ test = ["pytest (==5.2.1)", "multidict (>=5.0,<6.0)", "gunicorn (==20.0.4)", "py
 
 [[package]]
 name = "sentry-sdk"
-version = "0.19.5"
+version = "1.0.0"
 description = "Python client for Sentry (https://sentry.io)"
 category = "main"
 optional = false
@@ -709,7 +709,7 @@ multidict = ">=4.0"
 [metadata]
 lock-version = "1.1"
 python-versions = "^3.9"
-content-hash = "52346d6b5f491f22fdd5a3819993fd3fc6fcadbdbcec142d7a35738cb75e994c"
+content-hash = "2625e9d2fb1eeb96cdd64555515c5a252b7038acfb5e209d147ea40a6dd1ecc6"
 
 [metadata.files]
 aio-pika = [
@@ -1273,8 +1273,8 @@ sanic = [
     {file = "sanic-20.12.1.tar.gz", hash = "sha256:067d8dde5cf5dc1738e1ec3b9b41085bec29c9afc5745539334aa66a6dbf9beb"},
 ]
 sentry-sdk = [
-    {file = "sentry-sdk-0.19.5.tar.gz", hash = "sha256:737a094e49a529dd0fdcaafa9e97cf7c3d5eb964bd229821d640bc77f3502b3f"},
-    {file = "sentry_sdk-0.19.5-py2.py3-none-any.whl", hash = "sha256:0a711ec952441c2ec89b8f5d226c33bc697914f46e876b44a4edd3e7864cf4d0"},
+    {file = "sentry-sdk-1.0.0.tar.gz", hash = "sha256:71de00c9711926816f750bc0f57ef2abbcb1bfbdf5378c601df7ec978f44857a"},
+    {file = "sentry_sdk-1.0.0-py2.py3-none-any.whl", hash = "sha256:9221e985f425913204989d0e0e1cbb719e8b7fa10540f1bc509f660c06a34e66"},
 ]
 six = [
     {file = "six-1.15.0-py2.py3-none-any.whl", hash = "sha256:8b74bedcbbbaca38ff6d7491d76f2b06b3592611af620f8426e82dddb04a5ced"},
