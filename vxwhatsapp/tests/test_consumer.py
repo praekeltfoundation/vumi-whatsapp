@@ -8,7 +8,7 @@ from aio_pika import Connection, DeliveryMode, ExchangeType
 from aio_pika import Message as AMQPMessage
 from sanic import Sanic
 from sanic.log import logger
-from sanic.response import json
+from sanic.response import json, text
 
 from vxwhatsapp import config
 from vxwhatsapp.main import app
@@ -36,6 +36,22 @@ def whatsapp_mock_server(loop, sanic_client):
     async def message_automation(request, message_id):
         app.future.set_result(request)
         return json({})
+
+    @app.route("/v1/media", methods=["POST"])
+    async def media_upload(request):
+        return json({"media": [{"id": "test-media-id"}]})
+
+    return loop.run_until_complete(sanic_client(app))
+
+
+@pytest.fixture
+def media_mock_server(loop, sanic_client):
+    Sanic.test_mode = True
+    app = Sanic("mock_media")
+
+    @app.route("test_document.pdf", methods=["GET"])
+    async def test_document(request):
+        return text("test_document")
 
     return loop.run_until_complete(sanic_client(app))
 
@@ -153,3 +169,63 @@ async def test_invalid_outbound_text_message(test_client):
     await send_outbound_amqp_message(test_client.app.amqp_connection, b"invalid")
     assert "Invalid message body b'invalid'" in log_stream.getvalue()
     assert "ValueError" in log_stream.getvalue()
+
+
+async def test_outbound_document(whatsapp_mock_server, media_mock_server, test_client):
+    """
+    Should upload the document, and then send the message with the media ID
+    """
+    test_client.app.consumer.message_url = (
+        f"http://{whatsapp_mock_server.host}:{whatsapp_mock_server.port}"
+        "/v1/messages/"
+    )
+    test_client.app.consumer.media_url = (
+        f"http://{whatsapp_mock_server.host}:{whatsapp_mock_server.port}/v1/media"
+    )
+    document_url = (
+        f"http://{media_mock_server.host}:{media_mock_server.port}/test_document.pdf"
+    )
+    await send_outbound_message(
+        test_client.app.amqp_connection,
+        Message(
+            to_addr="27820001001",
+            from_addr="27820001002",
+            transport_name="whatsapp",
+            transport_type=Message.TRANSPORT_TYPE.HTTP_API,
+            helper_metadata={"document": document_url},
+        ),
+    )
+    request = await whatsapp_mock_server.app.future
+    assert request.json == {
+        "type": "document",
+        "document": {"id": "test-media-id"},
+        "to": "27820001001",
+    }
+
+
+async def test_outbound_document_cached(whatsapp_mock_server, test_client):
+    """
+    Should get the media URL from cache
+    """
+    test_client.app.consumer.message_url = (
+        f"http://{whatsapp_mock_server.host}:{whatsapp_mock_server.port}"
+        "/v1/messages/"
+    )
+    doc_url = "http://example/org/cached.pdf"
+    test_client.app.consumer.media_cache[doc_url] = "test-media-id"
+    await send_outbound_message(
+        test_client.app.amqp_connection,
+        Message(
+            to_addr="27820001001",
+            from_addr="27820001002",
+            transport_name="whatsapp",
+            transport_type=Message.TRANSPORT_TYPE.HTTP_API,
+            helper_metadata={"document": doc_url},
+        ),
+    )
+    request = await whatsapp_mock_server.app.future
+    assert request.json == {
+        "type": "document",
+        "document": {"id": "test-media-id"},
+        "to": "27820001001",
+    }
