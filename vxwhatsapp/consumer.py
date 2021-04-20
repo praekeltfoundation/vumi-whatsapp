@@ -1,5 +1,5 @@
 from json.decoder import JSONDecodeError
-from typing import Dict
+from typing import Any, Dict
 from urllib.parse import ParseResult, urlunparse
 
 import aiohttp
@@ -35,6 +35,8 @@ class Consumer:
         self.api_host = config.API_HOST
         self.message_url = self._make_url("/v1/messages")
         self.message_automation_url = self._make_url("/v1/messages/{}/automation")
+        self.media_url = self._make_url("/v1/media")
+        self.media_cache: Dict[str, str] = {}
 
     def _make_url(self, path):
         return urlunparse(
@@ -84,6 +86,25 @@ class Consumer:
             with whatsapp_message_send.time():
                 await self.submit_message(msg)
 
+    async def get_media_id(self, media_url):
+        if media_url in self.media_cache:
+            return self.media_cache[media_url]
+
+        async with self.session.get(media_url) as media_response:
+            media_response.raise_for_status()
+            turn_response = await self.session.post(
+                self.media_url,
+                headers={
+                    "Content-Type": media_response.headers["Content-Type"],
+                },
+                data=media_response.content,
+            )
+            turn_response.raise_for_status()
+            response_data: Any = await turn_response.json()
+            media_id = response_data["media"][0]["id"]
+            self.media_cache[media_url] = media_id
+            return media_id
+
     async def submit_message(self, message: Message):
         # TODO: support more message types
 
@@ -105,8 +126,17 @@ class Consumer:
                     url = self.message_automation_url.format(message.in_reply_to)
                 await delete_conversation_claim(self.redis, claim, message.to_addr)
 
+        data: dict[str, Any] = {"to": message.to_addr}
+
+        if "document" in message.helper_metadata:
+            media_id = await self.get_media_id(message.helper_metadata["document"])
+            data["type"] = "document"
+            data["document"] = {"id": media_id}
+        else:
+            data["text"] = {"body": message.content or ""}
+
         await self.session.post(
             url,
             headers=headers,
-            json={"to": message.to_addr, "text": {"body": message.content or ""}},
+            json=data,
         )
