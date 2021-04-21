@@ -198,7 +198,7 @@ async def test_outbound_document(whatsapp_mock_server, media_mock_server, test_c
     request = await whatsapp_mock_server.app.future
     assert request.json == {
         "type": "document",
-        "document": {"id": "test-media-id"},
+        "document": {"id": "test-media-id", "filename": "test_document.pdf"},
         "to": "27820001001",
     }
 
@@ -226,6 +226,6 @@ async def test_outbound_document_cached(whatsapp_mock_server, test_client):
     request = await whatsapp_mock_server.app.future
     assert request.json == {
         "type": "document",
-        "document": {"id": "test-media-id"},
+        "document": {"id": "test-media-id", "filename": "cached.pdf"},
         "to": "27820001001",
     }

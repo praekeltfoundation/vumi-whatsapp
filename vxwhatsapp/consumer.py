@@ -1,6 +1,7 @@
+import os
 from json.decoder import JSONDecodeError
 from typing import Any, Dict
-from urllib.parse import ParseResult, urlunparse
+from urllib.parse import ParseResult, urlparse, urlunparse
 
 import aiohttp
 import ujson
@@ -112,6 +113,11 @@ class Consumer:
             self.media_cache[media_url] = media_id
             return media_id
 
+    @staticmethod
+    def _extract_filename(url: str):
+        path = urlparse(url).path
+        return os.path.basename(path)
+
     async def submit_message(self, message: Message):
         # TODO: support more message types
 
@@ -136,9 +142,13 @@ class Consumer:
         data: dict[str, Any] = {"to": message.to_addr}
 
         if "document" in message.helper_metadata:
-            media_id = await self.get_media_id(message.helper_metadata["document"])
+            document_url = message.helper_metadata["document"]
+            media_id = await self.get_media_id(document_url)
             data["type"] = "document"
-            data["document"] = {"id": media_id}
+            data["document"] = {
+                "id": media_id,
+                "filename": self._extract_filename(document_url),
+            }
         else:
             data["text"] = {"body": message.content or ""}
 
