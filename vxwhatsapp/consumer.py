@@ -32,6 +32,12 @@ class Consumer:
             connector=aiohttp.TCPConnector(limit=config.CONCURRENCY),
             headers={"Authorization": f"Bearer {config.API_TOKEN}"},
         )
+        self.media_session = aiohttp.ClientSession(
+            json_serialize=ujson.dumps,
+            raise_for_status=True,
+            timeout=aiohttp.ClientTimeout(total=config.CONSUME_TIMEOUT),
+            connector=aiohttp.TCPConnector(limit=config.CONCURRENCY),
+        )
         self.api_host = config.API_HOST
         self.message_url = self._make_url("/v1/messages")
         self.message_automation_url = self._make_url("/v1/messages/{}/automation")
@@ -65,6 +71,7 @@ class Consumer:
 
     async def teardown(self):
         await self.session.close()
+        await self.media_session.close()
 
     async def process_message(self, message: IncomingMessage):
         try:
@@ -90,7 +97,7 @@ class Consumer:
         if media_url in self.media_cache:
             return self.media_cache[media_url]
 
-        async with self.session.get(media_url) as media_response:
+        async with self.media_session.get(media_url) as media_response:
             media_response.raise_for_status()
             turn_response = await self.session.post(
                 self.media_url,
