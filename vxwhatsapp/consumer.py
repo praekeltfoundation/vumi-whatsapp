@@ -1,7 +1,7 @@
 import os
 from json.decoder import JSONDecodeError
 from typing import Any, Dict
-from urllib.parse import ParseResult, urlparse, urlunparse
+from urllib.parse import ParseResult, unquote_plus, urlparse, urlunparse
 
 import aiohttp
 import ujson
@@ -116,7 +116,7 @@ class Consumer:
     @staticmethod
     def _extract_filename(url: str):
         path = urlparse(url).path
-        return os.path.basename(path)
+        return os.path.basename(unquote_plus(path))
 
     async def submit_message(self, message: Message):
         # TODO: support more message types

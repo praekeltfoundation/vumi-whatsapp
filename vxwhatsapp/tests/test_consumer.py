@@ -211,7 +211,7 @@ async def test_outbound_document_cached(whatsapp_mock_server, test_client):
         f"http://{whatsapp_mock_server.host}:{whatsapp_mock_server.port}"
         "/v1/messages/"
     )
-    doc_url = "http://example/org/cached.pdf"
+    doc_url = "http://example/org/cached+%26.pdf"
     test_client.app.consumer.media_cache[doc_url] = "test-media-id"
     await send_outbound_message(
         test_client.app.amqp_connection,
@@ -226,6 +226,6 @@ async def test_outbound_document_cached(whatsapp_mock_server, test_client):
     request = await whatsapp_mock_server.app.future
     assert request.json == {
         "type": "document",
-        "document": {"id": "test-media-id", "filename": "cached.pdf"},
+        "document": {"id": "test-media-id", "filename": "cached &.pdf"},
         "to": "27820001001",
     }
