@@ -139,6 +139,7 @@ class Consumer:
                     and message.in_reply_to
                 ):
                     url = self.message_automation_url.format(message.in_reply_to)
+                    headers["Accept"] = "application/vnd.v1+json"
                 await delete_conversation_claim(self.redis, claim, message.to_addr)
 
         data: dict[str, Any] = {"to": message.to_addr}

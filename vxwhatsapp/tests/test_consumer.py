@@ -177,6 +177,7 @@ async def test_outbound_text_automation_handle(whatsapp_mock_server, test_client
     request = await whatsapp_mock_server.app.future
     assert request.json == {"text": {"body": "test message"}, "to": "27820001001"}
     assert request.headers["X-Turn-Claim-Release"] == "test-claim"
+    assert request.headers["Accept"] == "application/vnd.v1+json"
     assert "/v1/messages/message-id/automation" in request.url
 
 
