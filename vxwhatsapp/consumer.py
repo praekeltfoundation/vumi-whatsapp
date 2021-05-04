@@ -21,6 +21,7 @@ WHATSAPP_RQS_LATENCY = Histogram(
 )
 whatsapp_message_send = WHATSAPP_RQS_LATENCY.labels("/v1/messages")
 whatsapp_media_upload = WHATSAPP_RQS_LATENCY.labels("/v1/media")
+whatsapp_contact_check = WHATSAPP_RQS_LATENCY.labels("/v1/contacts")
 
 
 class Consumer:
@@ -45,6 +46,7 @@ class Consumer:
         self.message_automation_url = self._make_url("/v1/messages/{}/automation")
         self.media_url = self._make_url("/v1/media")
         self.media_cache: Dict[str, str] = {}
+        self.contact_url = self._make_url("/v1/contacts")
 
     def _make_url(self, path):
         return urlunparse(
@@ -152,9 +154,25 @@ class Consumer:
         else:
             data["text"] = {"body": message.content or ""}
 
-        with whatsapp_message_send.time():
-            await self.session.post(
-                url,
-                headers=headers,
-                json=data,
-            )
+        try:
+            with whatsapp_message_send.time():
+                await self.session.post(url, headers=headers, json=data)
+        except aiohttp.ClientResponseError as e:
+            # If it fails with a 404, it could be that the contact has been forgotten.
+            # So do a contact check, and then try sending the message again
+            if e.status != 404:  # pragma: no cover
+                raise e
+            with whatsapp_contact_check.time():
+                c = await self.session.post(
+                    self.contact_url,
+                    json={
+                        "blocking": "wait",
+                        "contacts": [f"+{message.to_addr.lstrip('+')}"],
+                    },
+                )
+                contact_status = (await c.json())["contacts"][0]["status"]
+                if contact_status != "valid":
+                    # If the contact isn't on whatsapp, drop the message and log error
+                    logger.exception(f"Contact {message.to_addr} not on whatsapp")
+                    return
+                await self.session.post(url, headers=headers, json=data)
