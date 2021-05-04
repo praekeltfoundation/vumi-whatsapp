@@ -20,6 +20,7 @@ WHATSAPP_RQS_LATENCY = Histogram(
     ["endpoint"],
 )
 whatsapp_message_send = WHATSAPP_RQS_LATENCY.labels("/v1/messages")
+whatsapp_media_upload = WHATSAPP_RQS_LATENCY.labels("/v1/media")
 
 
 class Consumer:
@@ -91,8 +92,7 @@ class Consumer:
 
         async with message.process(requeue=True):
             logger.debug(f"Processing outbound message {msg}")
-            with whatsapp_message_send.time():
-                await self.submit_message(msg)
+            await self.submit_message(msg)
 
     async def get_media_id(self, media_url):
         if media_url in self.media_cache:
@@ -100,14 +100,14 @@ class Consumer:
 
         async with self.media_session.get(media_url) as media_response:
             media_response.raise_for_status()
-            turn_response = await self.session.post(
-                self.media_url,
-                headers={
-                    "Content-Type": media_response.headers["Content-Type"],
-                },
-                data=media_response.content,
-            )
-            turn_response.raise_for_status()
+            with whatsapp_media_upload.time():
+                turn_response = await self.session.post(
+                    self.media_url,
+                    headers={
+                        "Content-Type": media_response.headers["Content-Type"],
+                    },
+                    data=media_response.content,
+                )
             response_data: Any = await turn_response.json()
             media_id = response_data["media"][0]["id"]
             self.media_cache[media_url] = media_id
@@ -152,8 +152,9 @@ class Consumer:
         else:
             data["text"] = {"body": message.content or ""}
 
-        await self.session.post(
-            url,
-            headers=headers,
-            json=data,
-        )
+        with whatsapp_message_send.time():
+            await self.session.post(
+                url,
+                headers=headers,
+                json=data,
+            )
