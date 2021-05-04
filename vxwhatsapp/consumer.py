@@ -135,7 +135,7 @@ class Consumer:
             elif message.session_event == Message.SESSION_EVENT.CLOSE:
                 headers["X-Turn-Claim-Release"] = claim
                 if (
-                    message.transport_metadata.get("automation_handle")
+                    message.helper_metadata.get("automation_handle")
                     and message.in_reply_to
                 ):
                     url = self.message_automation_url.format(message.in_reply_to)
