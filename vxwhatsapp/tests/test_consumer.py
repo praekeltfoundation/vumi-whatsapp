@@ -26,11 +26,13 @@ def whatsapp_mock_server(loop, sanic_client):
     Sanic.test_mode = True
     app = Sanic("mock_whatsapp")
     app.future = Future()
+    app.contact_future = Future()
+    app.message_status_code = 200
 
     @app.route("/v1/messages", methods=["POST"])
     async def messages(request):
         app.future.set_result(request)
-        return json({})
+        return json({}, status=app.message_status_code)
 
     @app.route("/v1/messages/<message_id>/automation", methods=["POST"])
     async def message_automation(request, message_id):
@@ -40,6 +42,23 @@ def whatsapp_mock_server(loop, sanic_client):
     @app.route("/v1/media", methods=["POST"])
     async def media_upload(request):
         return json({"media": [{"id": "test-media-id"}]})
+
+    @app.route("/v1/contacts", methods=["POST"])
+    async def contact_check(request):
+        app.contact_future.set_result(request)
+        msisdn = request.json["contacts"][0]
+        if msisdn == "+27820001111":
+            status = "invalid"
+        else:
+            status = "valid"
+            app.message_status_code = 200
+        return json(
+            {
+                "contacts": [
+                    {"wa_id": msisdn.lstrip("+"), "input": msisdn, "status": status}
+                ]
+            }
+        )
 
     return loop.run_until_complete(sanic_client(app))
 
@@ -229,3 +248,68 @@ async def test_outbound_document_cached(whatsapp_mock_server, test_client):
         "document": {"id": "test-media-id", "filename": "cached &.pdf"},
         "to": "27820001001",
     }
+
+
+async def test_outbound_missing_contact(whatsapp_mock_server, test_client):
+    """
+    Makes a contact check, and then tries again
+    """
+    test_client.app.consumer.message_url = (
+        f"http://{whatsapp_mock_server.host}:{whatsapp_mock_server.port}/v1/messages"
+    )
+    test_client.app.consumer.contact_url = (
+        f"http://{whatsapp_mock_server.host}:{whatsapp_mock_server.port}/v1/contacts"
+    )
+    whatsapp_mock_server.app.message_status_code = 404
+    await send_outbound_message(
+        test_client.app.amqp_connection,
+        Message(
+            to_addr="27820001001",
+            from_addr="27820001002",
+            transport_name="whatsapp",
+            transport_type=Message.TRANSPORT_TYPE.HTTP_API,
+            content="test message",
+        ),
+    )
+    msg1 = await whatsapp_mock_server.app.future
+    whatsapp_mock_server.app.future = Future()
+    contact = await whatsapp_mock_server.app.contact_future
+    msg2 = await whatsapp_mock_server.app.future
+
+    assert msg1.url == test_client.app.consumer.message_url
+    assert msg1.json == {"text": {"body": "test message"}, "to": "27820001001"}
+
+    assert contact.url == test_client.app.consumer.contact_url
+    assert contact.json == {"blocking": "wait", "contacts": ["+27820001001"]}
+
+    assert msg2.url == test_client.app.consumer.message_url
+    assert msg2.json == {"text": {"body": "test message"}, "to": "27820001001"}
+
+
+async def test_outbound_missing_contact_permanent(whatsapp_mock_server, test_client):
+    """
+    Makes a contact check, and if the contact isn't valid, drop the message
+    """
+    test_client.app.consumer.message_url = (
+        f"http://{whatsapp_mock_server.host}:{whatsapp_mock_server.port}/v1/messages"
+    )
+    test_client.app.consumer.contact_url = (
+        f"http://{whatsapp_mock_server.host}:{whatsapp_mock_server.port}/v1/contacts"
+    )
+    whatsapp_mock_server.app.message_status_code = 404
+    await send_outbound_message(
+        test_client.app.amqp_connection,
+        Message(
+            to_addr="27820001111",
+            from_addr="27820001000",
+            transport_name="whatsapp",
+            transport_type=Message.TRANSPORT_TYPE.HTTP_API,
+            content="test message",
+        ),
+    )
+    msg1 = await whatsapp_mock_server.app.future
+    contact = await whatsapp_mock_server.app.contact_future
+
+    assert msg1.json == {"text": {"body": "test message"}, "to": "27820001111"}
+
+    assert contact.json == {"blocking": "wait", "contacts": ["+27820001111"]}
