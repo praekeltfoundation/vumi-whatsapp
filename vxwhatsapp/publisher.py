@@ -62,10 +62,12 @@ class Publisher:
         timestamp = int(time.time() - 5 * 60)
         # Do the get + delete atomically, since there could be multiple processes
         # for the same transport
-        transaction: Redis = self.redis.multi_exec()
-        transaction.zrangebyscore("claims", max=timestamp)
-        transaction.zremrangebyscore("claims", max=timestamp)
-        addresses, _ = await transaction.execute()
+        async with self.redis.pipeline() as pipe:
+            addresses, _ = (
+                await pipe.zrangebyscore("claims", min=0, max=timestamp)
+                .zremrangebyscore("claims", min=0, max=timestamp)
+                .execute()
+            )
         tasks = []
         for address in addresses:
             msg = Message(

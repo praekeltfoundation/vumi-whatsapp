@@ -117,7 +117,7 @@ async def test_outbound_text_message(whatsapp_mock_server, test_client):
     assert request.json == {"text": {"body": "test message"}, "to": "27820001001"}
     assert request.headers["X-Turn-Claim-Extend"] == "test-claim"
 
-    [addr] = await test_client.app.redis.zrange("claims")
+    [addr] = await test_client.app.redis.zrange("claims", 0, -1)
     assert addr == "27820001001"
     await test_client.app.redis.delete("claims")
 
@@ -131,7 +131,7 @@ async def test_outbound_text_end_session(whatsapp_mock_server, test_client):
     test_client.app.consumer.message_url = (
         f"http://{whatsapp_mock_server.host}:{whatsapp_mock_server.port}/v1/messages"
     )
-    await redis.zadd("claims", int(time.time()), "27820001001")
+    await redis.zadd("claims", {"27820001001": int(time.time())})
     await send_outbound_message(
         test_client.app.amqp_connection,
         Message(
@@ -148,7 +148,7 @@ async def test_outbound_text_end_session(whatsapp_mock_server, test_client):
     assert request.json == {"text": {"body": "test message"}, "to": "27820001001"}
     assert request.headers["X-Turn-Claim-Release"] == "test-claim"
 
-    assert await redis.zcount("claims") == 0
+    assert await redis.zcount("claims", "-inf", "+inf") == 0
     await redis.delete("claims")
 
 

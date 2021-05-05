@@ -53,7 +53,7 @@ async def test_valid_signature(test_client):
             "messages": [
                 {
                     "from": "27820001001",
-                    "id": "abc123",
+                    "id": "abc121",
                     "timestamp": "123456789",
                     "type": "text",
                 }
@@ -92,7 +92,7 @@ async def test_valid_text_message(test_client):
             "messages": [
                 {
                     "from": "27820001001",
-                    "id": "abc123",
+                    "id": "abc122",
                     "timestamp": "123456789",
                     "type": "text",
                     "text": {"body": "test message"},
@@ -115,7 +115,7 @@ async def test_valid_text_message(test_client):
     message = Message.from_json(message.body.decode("utf-8"))
     assert message.from_addr == "27820001001"
     assert message.content == "test message"
-    assert message.message_id == "abc123"
+    assert message.message_id == "abc122"
     assert message.timestamp == datetime(1973, 11, 29, 21, 33, 9, tzinfo=timezone.utc)
     assert message.transport_metadata == {
         "contacts": None,
@@ -131,7 +131,7 @@ async def test_text_message_conversation_claim_redis(test_client):
             "messages": [
                 {
                     "from": "27820001001",
-                    "id": "abc123",
+                    "id": "abc124",
                     "timestamp": "123456789",
                     "type": "text",
                     "text": {"body": "test message"},
@@ -151,7 +151,7 @@ async def test_text_message_conversation_claim_redis(test_client):
     assert (await response.json()) == {}
 
     await get_amqp_message(queue)
-    [address] = await test_client.app.redis.zrange("claims")
+    [address] = await test_client.app.redis.zrange("claims", 0, -1)
     assert address == "27820001001"
     await test_client.app.redis.delete("claims")
 
@@ -163,7 +163,7 @@ async def test_ignore_system_messages(test_client):
             "messages": [
                 {
                     "from": "27820001001",
-                    "id": "abc123",
+                    "id": "abc125",
                     "timestamp": "123456789",
                     "type": "system",
                     "system": {"body": "test message"},
@@ -197,7 +197,7 @@ async def test_valid_location_message(test_client):
             "messages": [
                 {
                     "from": "27820001001",
-                    "id": "abc123",
+                    "id": "abc126",
                     "timestamp": "123456789",
                     "type": "location",
                     "location": {"name": "test location"},
@@ -228,7 +228,7 @@ async def test_valid_button_message(test_client):
             "messages": [
                 {
                     "from": "27820001001",
-                    "id": "abc123",
+                    "id": "abc127",
                     "timestamp": "123456789",
                     "type": "button",
                     "button": {"text": "test response"},
@@ -259,7 +259,7 @@ async def test_valid_media_message(test_client):
             "messages": [
                 {
                     "from": "27820001001",
-                    "id": "abc123",
+                    "id": "abc128",
                     "timestamp": "123456789",
                     "type": "image",
                     "image": {
@@ -291,7 +291,7 @@ async def test_valid_event(test_client):
         {
             "statuses": [
                 {
-                    "id": "abc123",
+                    "id": "abc129",
                     "recipient_id": "27820001001",
                     "status": "read",
                     "timestamp": "123456789",
@@ -309,8 +309,8 @@ async def test_valid_event(test_client):
 
     message = await get_amqp_message(queue)
     event = Event.from_json(message.body.decode("utf-8"))
-    assert event.user_message_id == "abc123"
-    assert event.sent_message_id == "abc123"
+    assert event.user_message_id == "abc129"
+    assert event.sent_message_id == "abc129"
     assert event.event_type == Event.EVENT_TYPE.DELIVERY_REPORT
     assert event.delivery_status == Event.DELIVERY_STATUS.DELIVERED
     assert event.timestamp == datetime(1973, 11, 29, 21, 33, 9, tzinfo=timezone.utc)
