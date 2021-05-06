@@ -1,54 +1,62 @@
-from aioredis import create_redis_pool
+from typing import AsyncGenerator
+
+import pytest
+from aioredis import Redis, from_url
 
 from vxwhatsapp import config
 from vxwhatsapp.claims import delete_conversation_claim, store_conversation_claim
 
 
-async def test_store_missing_parameters():
+@pytest.fixture
+async def redis() -> AsyncGenerator[Redis, None]:
+    conn = from_url(
+        config.REDIS_URL or "redis://", encoding="utf8", decode_responses=True
+    )
+    yield conn
+    await conn.close()
+
+
+async def test_store_missing_parameters(redis):
     """
     If no redis or no claim is passed, should do nothing
     """
     await store_conversation_claim(None, "foo", "bar")
 
-    redis = await create_redis_pool(config.REDIS_URL or "redis://", encoding="utf8")
     await store_conversation_claim(redis, None, "bar")
 
-    assert await redis.zcount("claims") == 0
+    assert await redis.zcount("claims", "-inf", "+inf") == 0
     await redis.delete("claims")
 
 
-async def test_store_claims():
+async def test_store_claims(redis):
     """
     Should store the claim inside the "claims" zset
     """
-    redis = await create_redis_pool(config.REDIS_URL or "redis://", encoding="utf8")
     await store_conversation_claim(redis, "claim", "value")
 
-    [val] = await redis.zrange("claims", start=0, stop=-1)
+    [val] = await redis.zrange("claims", start=0, end=-1)
     assert val == "value"
     await redis.delete("claims")
 
 
-async def test_delete_missing_parameters():
+async def test_delete_missing_parameters(redis):
     """
     If no redis or no claim is passed, should do nothing
     """
     await delete_conversation_claim(None, "foo", "bar")
 
-    redis = await create_redis_pool(config.REDIS_URL or "redis://", encoding="utf8")
     await delete_conversation_claim(redis, None, "bar")
 
-    assert await redis.zcount("claims") == 0
+    assert await redis.zcount("claims", "-inf", "+inf") == 0
     await redis.delete("claims")
 
 
-async def test_delete_claims():
+async def test_delete_claims(redis):
     """
     Should delete the specified claim
     """
-    redis = await create_redis_pool(config.REDIS_URL or "redis://", encoding="utf8")
-    await redis.zadd("claims", 1, "27820001001")
+    await redis.zadd("claims", {"27820001001": 1})
     await delete_conversation_claim(redis, "foo", "27820001001")
 
-    assert await redis.zcount("claims") == 0
+    assert await redis.zcount("claims", "-inf", "+inf") == 0
     await redis.delete("claims")

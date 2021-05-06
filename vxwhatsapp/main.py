@@ -32,14 +32,15 @@ async def setup_redis(app, loop):
     if not config.REDIS_URL:
         app.redis = None
         return
-    app.redis = await aioredis.create_redis_pool(config.REDIS_URL, encoding="utf8")
+    app.redis = aioredis.from_url(
+        config.REDIS_URL, encoding="utf8", decode_responses=True
+    )
 
 
 @app.listener("after_server_stop")
 async def shutdown_redis(app, loop):
     if app.redis:
-        app.redis.close()
-        await app.redis.wait_closed()
+        await app.redis.close()
 
 
 @app.listener("before_server_start")
