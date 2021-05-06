@@ -69,7 +69,7 @@ whatsapp_webhook_schema = {
                 "button": {
                     "type": "object",
                     "properties": {
-                        "payload": {"type": "string"},
+                        "payload": {"type": ["string", "null"]},
                         "text": {"type": "string"},
                     },
                 },
