@@ -35,7 +35,7 @@ async def dedupe_and_publish_message(request, message):
         if await request.app.redis.get(seen_key) is not None:
             return
         await publish_message(request, message)
-        await request.app.redis.setex(seen_key, 60, "")
+        await request.app.redis.setex(seen_key, config.DEDUPLICATION_WINDOW, "")
 
 
 @bp.route("/webhook", methods=["POST"])
