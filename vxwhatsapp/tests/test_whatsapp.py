@@ -315,3 +315,67 @@ async def test_valid_event(test_client):
     assert event.delivery_status == Event.DELIVERY_STATUS.DELIVERED
     assert event.timestamp == datetime(1973, 11, 29, 21, 33, 9, tzinfo=timezone.utc)
     assert event.helper_metadata == {"recipient_id": "27820001001", "status": "read"}
+
+
+async def test_duplicate_message(test_client):
+    queue = await setup_amqp_queue(test_client.app.amqp_connection)
+    data = ujson.dumps(
+        {
+            "messages": [
+                {
+                    "from": "27820001001",
+                    "id": "abc130",
+                    "timestamp": "123456789",
+                    "type": "text",
+                    "text": {"body": "test message"},
+                }
+            ]
+        }
+    )
+    headers = {
+        "X-Turn-Hook-Signature": generate_hmac_signature(data, "testsecret"),
+        "X-Turn-Claim": "test-claim",
+    }
+    url = app.url_for("whatsapp.whatsapp_webhook")
+
+    await test_client.post(url, headers=headers, data=data)
+    await get_amqp_message(queue)
+
+    await test_client.post(url, headers=headers, data=data)
+    err = None
+    try:
+        await get_amqp_message(queue)
+    except QueueEmpty as e:
+        err = e
+    assert err is not None
+
+
+async def test_duplicate_message_no_redis(test_client):
+    """
+    If there's no redis configured, then we allow duplicate messages
+    """
+    queue = await setup_amqp_queue(test_client.app.amqp_connection)
+    test_client.app.redis = None
+    data = ujson.dumps(
+        {
+            "messages": [
+                {
+                    "from": "27820001001",
+                    "id": "abc130",
+                    "timestamp": "123456789",
+                    "type": "text",
+                    "text": {"body": "test message"},
+                }
+            ]
+        }
+    )
+    headers = {
+        "X-Turn-Hook-Signature": generate_hmac_signature(data, "testsecret"),
+        "X-Turn-Claim": "test-claim",
+    }
+    url = app.url_for("whatsapp.whatsapp_webhook")
+    await test_client.post(url, headers=headers, data=data)
+    await get_amqp_message(queue)
+
+    await test_client.post(url, headers=headers, data=data)
+    await get_amqp_message(queue)

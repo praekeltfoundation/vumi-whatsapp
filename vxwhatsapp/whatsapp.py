@@ -14,6 +14,30 @@ from vxwhatsapp.schema import validate_schema, whatsapp_webhook_schema
 bp = Blueprint("whatsapp", version=1)
 
 
+async def publish_message(request, message):
+    return await gather(
+        request.app.publisher.publish_message(message),
+        store_conversation_claim(
+            request.app.redis,
+            request.headers.get("X-Turn-Claim"),
+            message.from_addr,
+        ),
+    )
+
+
+async def dedupe_and_publish_message(request, message):
+    if not request.app.redis:
+        return await publish_message(request, message)
+    lock_key = f"msglock:{message.message_id}"
+    seen_key = f"msgseen:{message.message_id}"
+    lock = request.app.redis.lock(lock_key, timeout=0.5, blocking_timeout=1.0)
+    async with lock:
+        if await request.app.redis.get(seen_key) is not None:
+            return
+        await publish_message(request, message)
+        await request.app.redis.setex(seen_key, 60, "")
+
+
 @bp.route("/webhook", methods=["POST"])
 @validate_hmac("X-Turn-Hook-Signature", lambda: config.HMAC_SECRET)
 @validate_schema(whatsapp_webhook_schema)
@@ -53,14 +77,7 @@ async def whatsapp_webhook(request: Request) -> HTTPResponse:
                 "claim": request.headers.get("X-Turn-Claim"),
             },
         )
-        tasks.append(request.app.publisher.publish_message(message))
-        tasks.append(
-            store_conversation_claim(
-                request.app.redis,
-                request.headers.get("X-Turn-Claim"),
-                message.from_addr,
-            )
-        )
+        tasks.append(dedupe_and_publish_message(request, message))
 
     for ev in request.json.get("statuses", []):
         message_id = ev.pop("id")

@@ -1,9 +1,10 @@
-from aioredis import from_url, Redis
+from typing import AsyncGenerator
+
+import pytest
+from aioredis import Redis, from_url
 
 from vxwhatsapp import config
 from vxwhatsapp.claims import delete_conversation_claim, store_conversation_claim
-import pytest
-from typing import AsyncGenerator
 
 
 @pytest.fixture
