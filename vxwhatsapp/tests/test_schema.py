@@ -153,7 +153,7 @@ whatsapp_valid = [
         "contacts": [{"profile": {"name": "Kerry Fisher"}, "wa_id": "16505551234"}],
         "messages": [
             {
-                "button": {"payload": "No-Button-Payload", "text": "No"},
+                "button": {"payload": None, "text": "No"},
                 "context": {"from": "16315558007", "id": "gBGGFmkiWVVPAgkgQkwi7IORac0"},
                 "from": "16505551234",
                 "id": "ABGGFmkiWVVPAgo-sKD87hgxPHdF",
