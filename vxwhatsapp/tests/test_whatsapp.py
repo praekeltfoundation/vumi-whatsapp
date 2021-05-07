@@ -157,6 +157,52 @@ async def test_valid_unknown_message(test_client):
     assert message.transport_metadata["message"] == {"type": "unknown"}
 
 
+async def test_valid_contacts_message(test_client):
+    queue = await setup_amqp_queue(test_client.app.amqp_connection)
+    contact = {
+        "addresses": [],
+        "emails": [],
+        "ims": [],
+        "name": {"first_name": "test"},
+        "org": {},
+        "phones": [{"phone": "+27820001003", "type": "Mobile"}],
+        "urls": [],
+    }
+    data = ujson.dumps(
+        {
+            "messages": [
+                {
+                    "from": "27820001001",
+                    "id": "abc131",
+                    "timestamp": "123456789",
+                    "type": "contacts",
+                    "contacts": [contact],
+                }
+            ]
+        }
+    )
+    response = await test_client.post(
+        app.url_for("whatsapp.whatsapp_webhook"),
+        headers={
+            "X-Turn-Hook-Signature": generate_hmac_signature(data, "testsecret"),
+        },
+        data=data,
+    )
+    assert response.status == 200
+    assert (await response.json()) == {}
+
+    message = await get_amqp_message(queue)
+    message = Message.from_json(message.body.decode("utf-8"))
+    assert message.from_addr == "27820001001"
+    assert message.content is None
+    assert message.message_id == "abc131"
+    assert message.timestamp == datetime(1973, 11, 29, 21, 33, 9, tzinfo=timezone.utc)
+    assert message.transport_metadata["message"] == {
+        "type": "contacts",
+        "contacts": [contact],
+    }
+
+
 async def test_text_message_conversation_claim_redis(test_client):
     queue = await setup_amqp_queue(test_client.app.amqp_connection)
     data = ujson.dumps(
