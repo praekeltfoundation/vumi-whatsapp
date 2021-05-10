@@ -57,8 +57,10 @@ async def whatsapp_webhook(request: Request) -> HTTPResponse:
             content = msg["location"].pop("name", None)
         elif msg["type"] == "button":
             content = msg["button"].pop("text")
+        elif msg["type"] in ("unknown", "contacts"):
+            content = None
         else:
-            content = msg.get(msg["type"], {}).pop("caption", None)
+            content = msg[msg["type"]].pop("caption", None)
 
         message = Message(
             to_addr=config.WHATSAPP_NUMBER,
