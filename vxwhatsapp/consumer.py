@@ -156,7 +156,10 @@ class Consumer:
                 "body": {"text": message.content or ""},
                 "action": {
                     "buttons": [
-                        {"type": "reply", "reply": {"title": option[:20]}}
+                        {
+                            "type": "reply",
+                            "reply": {"id": option[:256], "title": option[:20]},
+                        }
                         for option in options[:3]
                     ],
                 },
@@ -192,7 +195,25 @@ class Consumer:
                 data["interactive"]["footer"] = {
                     "text": message.helper_metadata["footer"][:60]
                 }
-        # TODO: list
+        elif "sections" in message.helper_metadata:
+            data["type"] = "interactive"
+            data["interactive"] = {
+                "type": "list",
+                "body": {"text": message.content or ""},
+                "action": {
+                    "button": message.helper_metadata["button"][:20],
+                    "sections": message.helper_metadata["sections"][:10],
+                },
+            }
+            if "header" in message.helper_metadata:
+                data["interactive"]["header"] = {
+                    "type": "text",
+                    "text": message.helper_metadata["header"][:60],
+                }
+            if "footer" in message.helper_metadata:
+                data["interactive"]["footer"] = {
+                    "text": message.helper_metadata["footer"][:60]
+                }
         elif "document" in message.helper_metadata:
             document_url = message.helper_metadata["document"]
             media_id, _ = await self.get_media_id(document_url)

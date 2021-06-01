@@ -101,3 +101,44 @@ Message(
     }
 )
 ```
+
+### List
+Add a `sections` field to include all the sections and rows that you require in your
+list, and a `button` field for the button content, to the `helper_metadata`. The message
+`content` is used as the message text.
+
+Each section in the list must have a `title`, and a list of `rows`. Each row must have
+an `id` and a `title`, and may have an optional `description`.
+
+There is an optional `header` field, the value of which is the text to use for the
+header.
+
+There is an optional `footer` field, the value of which is the text to use in the
+footer.
+
+```python
+Message(
+    content="Please select an option:",
+    helper_metadata={
+        "button": "Main Menu",
+        "sections": [
+            {
+                "title": "Section 1",
+                "rows": [
+                    {"id": "1A", "title": "Option 1A", "description": "1A description"},
+                    {"id": "1B", "title": "Option 1B"},
+                ]
+            },
+            {
+                "title": "Section 2",
+                "rows": [
+                    {"id": "2A", "title": "Option 2A"},
+                    {"id": "2B", "title": "Option 2B"},
+                ]
+            }
+        ]
+        "header": "Welcome to the main menu",
+        "footer": "Or reply with your question"
+    }
+)
+```

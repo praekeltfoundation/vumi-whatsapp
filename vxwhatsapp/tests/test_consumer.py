@@ -349,9 +349,9 @@ async def test_buttons_text(whatsapp_mock_server, test_client):
             "body": {"text": "test body"},
             "action": {
                 "buttons": [
-                    {"reply": {"title": "button1"}, "type": "reply"},
-                    {"reply": {"title": "button2"}, "type": "reply"},
-                    {"reply": {"title": "button3"}, "type": "reply"},
+                    {"reply": {"id": "button1", "title": "button1"}, "type": "reply"},
+                    {"reply": {"id": "button2", "title": "button2"}, "type": "reply"},
+                    {"reply": {"id": "button3", "title": "button3"}, "type": "reply"},
                 ]
             },
             "header": {"type": "text", "text": "test header"},
@@ -393,7 +393,7 @@ async def test_buttons_image_header(whatsapp_mock_server, test_client):
             "body": {"text": "test body"},
             "action": {
                 "buttons": [
-                    {"reply": {"title": "button1"}, "type": "reply"},
+                    {"reply": {"id": "button1", "title": "button1"}, "type": "reply"},
                 ]
             },
             "header": {"type": "image", "image": {"id": "test-media-id"}},
@@ -434,7 +434,7 @@ async def test_buttons_video_header(whatsapp_mock_server, test_client):
             "body": {"text": "test body"},
             "action": {
                 "buttons": [
-                    {"reply": {"title": "button1"}, "type": "reply"},
+                    {"reply": {"id": "button1", "title": "button1"}, "type": "reply"},
                 ]
             },
             "header": {"type": "video", "video": {"id": "test-media-id"}},
@@ -478,12 +478,63 @@ async def test_buttons_document_header(whatsapp_mock_server, test_client):
             "body": {"text": "test body"},
             "action": {
                 "buttons": [
-                    {"reply": {"title": "button1"}, "type": "reply"},
+                    {"reply": {"id": "button1", "title": "button1"}, "type": "reply"},
                 ]
             },
             "header": {
                 "type": "document",
                 "document": {"id": "test-media-id", "filename": "document.pdf"},
             },
+        },
+    }
+
+
+async def test_list(whatsapp_mock_server, test_client):
+    """
+    Should submit a message with the requested list, header, and footer
+    """
+    test_client.app.consumer.message_url = (
+        f"http://{whatsapp_mock_server.host}:{whatsapp_mock_server.port}"
+        "/v1/messages/"
+    )
+    await send_outbound_message(
+        test_client.app.amqp_connection,
+        Message(
+            to_addr="27820001001",
+            from_addr="27820001002",
+            transport_name="whatsapp",
+            transport_type=Message.TRANSPORT_TYPE.HTTP_API,
+            content="test body",
+            helper_metadata={
+                "button": "test button",
+                "sections": [
+                    {
+                        "title": "s1",
+                        "rows": [{"id": "r1", "title": "row1", "description": "row 1"}],
+                    }
+                ],
+                "header": "test header",
+                "footer": "test footer",
+            },
+        ),
+    )
+    request = await whatsapp_mock_server.app.future
+    assert request.json == {
+        "to": "27820001001",
+        "type": "interactive",
+        "interactive": {
+            "type": "list",
+            "body": {"text": "test body"},
+            "action": {
+                "button": "test button",
+                "sections": [
+                    {
+                        "title": "s1",
+                        "rows": [{"id": "r1", "title": "row1", "description": "row 1"}],
+                    }
+                ],
+            },
+            "header": {"type": "text", "text": "test header"},
+            "footer": {"text": "test footer"},
         },
     }
