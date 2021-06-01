@@ -61,3 +61,43 @@ whatsapp API. Defaults to 10 seconds
 
 `REDIS_URL` - The URL to use to connect to Redis. Optional. If supplied, enables Turn
 conversation claim expiry messages.
+
+
+## Outbound message types
+
+### Text
+This is the default message type. Uses the `content` field on the message for the text
+content of the message
+
+```python
+Message(content="Test message content")
+```
+
+### Document
+Add a `document` field to the message `helper_metadata`, the value of which is a URL
+pointing to the document that you want to send.
+
+```python
+Message(helper_metadata={"document": "https://example.org/test.pdf"})
+```
+
+### Button
+Add an `buttons` field to the `helper_metadata`, the value of which is a list of
+options. The message `content` is used as the message text
+
+There is an optional `header` field, the value of which is either text for
+a text header, or a URL for media headers.
+
+There is an optional `footer` field, the value of which is the text to include in the
+footer
+
+```python
+Message(
+    content="Please select an option:",
+    helper_metadata={
+        "buttons": ["Option 1", "Option 2"],
+        "header": "https://example.org/header.png",
+        "footer": "Or reply with your question"
+    }
+)
+```

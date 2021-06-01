@@ -233,7 +233,7 @@ async def test_outbound_document_cached(whatsapp_mock_server, test_client):
         "/v1/messages/"
     )
     doc_url = "http://example/org/cached+%26.pdf"
-    test_client.app.consumer.media_cache[doc_url] = "test-media-id"
+    test_client.app.consumer.media_cache[doc_url] = ("test-media-id", "application/pdf")
     await send_outbound_message(
         test_client.app.amqp_connection,
         Message(
@@ -315,3 +315,175 @@ async def test_outbound_missing_contact_permanent(whatsapp_mock_server, test_cli
     assert msg1.json == {"text": {"body": "test message"}, "to": "27820001111"}
 
     assert contact.json == {"blocking": "wait", "contacts": ["+27820001111"]}
+
+
+async def test_buttons_text(whatsapp_mock_server, test_client):
+    """
+    Should submit a message with the requested buttons, header, and footer
+    """
+    test_client.app.consumer.message_url = (
+        f"http://{whatsapp_mock_server.host}:{whatsapp_mock_server.port}"
+        "/v1/messages/"
+    )
+    await send_outbound_message(
+        test_client.app.amqp_connection,
+        Message(
+            to_addr="27820001001",
+            from_addr="27820001002",
+            transport_name="whatsapp",
+            transport_type=Message.TRANSPORT_TYPE.HTTP_API,
+            content="test body",
+            helper_metadata={
+                "buttons": ["button1", "button2", "button3"],
+                "header": "test header",
+                "footer": "test footer",
+            },
+        ),
+    )
+    request = await whatsapp_mock_server.app.future
+    assert request.json == {
+        "to": "27820001001",
+        "type": "interactive",
+        "interactive": {
+            "type": "button",
+            "body": {"text": "test body"},
+            "action": {
+                "buttons": [
+                    {"reply": {"title": "button1"}, "type": "reply"},
+                    {"reply": {"title": "button2"}, "type": "reply"},
+                    {"reply": {"title": "button3"}, "type": "reply"},
+                ]
+            },
+            "header": {"type": "text", "text": "test header"},
+            "footer": {"text": "test footer"},
+        },
+    }
+
+
+async def test_buttons_image_header(whatsapp_mock_server, test_client):
+    """
+    Should upload the image, and then send a message with that image in the header
+    """
+    test_client.app.consumer.message_url = (
+        f"http://{whatsapp_mock_server.host}:{whatsapp_mock_server.port}"
+        "/v1/messages/"
+    )
+    image_url = "http://example.org/image.png"
+    test_client.app.consumer.media_cache[image_url] = ("test-media-id", "image/png")
+    await send_outbound_message(
+        test_client.app.amqp_connection,
+        Message(
+            to_addr="27820001001",
+            from_addr="27820001002",
+            transport_name="whatsapp",
+            transport_type=Message.TRANSPORT_TYPE.HTTP_API,
+            content="test body",
+            helper_metadata={
+                "buttons": ["button1"],
+                "header": image_url,
+            },
+        ),
+    )
+    request = await whatsapp_mock_server.app.future
+    assert request.json == {
+        "to": "27820001001",
+        "type": "interactive",
+        "interactive": {
+            "type": "button",
+            "body": {"text": "test body"},
+            "action": {
+                "buttons": [
+                    {"reply": {"title": "button1"}, "type": "reply"},
+                ]
+            },
+            "header": {"type": "image", "image": {"id": "test-media-id"}},
+        },
+    }
+
+
+async def test_buttons_video_header(whatsapp_mock_server, test_client):
+    """
+    Should upload the video, and then send a message with that video in the header
+    """
+    test_client.app.consumer.message_url = (
+        f"http://{whatsapp_mock_server.host}:{whatsapp_mock_server.port}"
+        "/v1/messages/"
+    )
+    video_url = "http://example.org/video.mp4"
+    test_client.app.consumer.media_cache[video_url] = ("test-media-id", "video/mp4")
+    await send_outbound_message(
+        test_client.app.amqp_connection,
+        Message(
+            to_addr="27820001001",
+            from_addr="27820001002",
+            transport_name="whatsapp",
+            transport_type=Message.TRANSPORT_TYPE.HTTP_API,
+            content="test body",
+            helper_metadata={
+                "buttons": ["button1"],
+                "header": video_url,
+            },
+        ),
+    )
+    request = await whatsapp_mock_server.app.future
+    assert request.json == {
+        "to": "27820001001",
+        "type": "interactive",
+        "interactive": {
+            "type": "button",
+            "body": {"text": "test body"},
+            "action": {
+                "buttons": [
+                    {"reply": {"title": "button1"}, "type": "reply"},
+                ]
+            },
+            "header": {"type": "video", "video": {"id": "test-media-id"}},
+        },
+    }
+
+
+async def test_buttons_document_header(whatsapp_mock_server, test_client):
+    """
+    Should upload the document, and then send a message with that document in the header
+    """
+    test_client.app.consumer.message_url = (
+        f"http://{whatsapp_mock_server.host}:{whatsapp_mock_server.port}"
+        "/v1/messages/"
+    )
+    document_url = "http://example.org/document.pdf"
+    test_client.app.consumer.media_cache[document_url] = (
+        "test-media-id",
+        "application/pdf",
+    )
+    await send_outbound_message(
+        test_client.app.amqp_connection,
+        Message(
+            to_addr="27820001001",
+            from_addr="27820001002",
+            transport_name="whatsapp",
+            transport_type=Message.TRANSPORT_TYPE.HTTP_API,
+            content="test body",
+            helper_metadata={
+                "buttons": ["button1"],
+                "header": document_url,
+            },
+        ),
+    )
+    request = await whatsapp_mock_server.app.future
+    assert request.json == {
+        "to": "27820001001",
+        "type": "interactive",
+        "interactive": {
+            "type": "button",
+            "body": {"text": "test body"},
+            "action": {
+                "buttons": [
+                    {"reply": {"title": "button1"}, "type": "reply"},
+                ]
+            },
+            "header": {
+                "type": "document",
+                "document": {"id": "test-media-id", "filename": "document.pdf"},
+            },
+        },
+    }

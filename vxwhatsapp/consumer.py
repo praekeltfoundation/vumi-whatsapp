@@ -13,6 +13,7 @@ from sanic.log import logger
 from vxwhatsapp import config
 from vxwhatsapp.claims import delete_conversation_claim, store_conversation_claim
 from vxwhatsapp.models import Message
+from vxwhatsapp.utils import valid_url
 
 WHATSAPP_RQS_LATENCY = Histogram(
     "whatsapp_api_request_latency_sec",
@@ -112,8 +113,11 @@ class Consumer:
                 )
             response_data: Any = await turn_response.json()
             media_id = response_data["media"][0]["id"]
-            self.media_cache[media_url] = media_id
-            return media_id
+            self.media_cache[media_url] = (
+                media_id,
+                media_response.headers["Content-Type"],
+            )
+            return self.media_cache[media_url]
 
     @staticmethod
     def _extract_filename(url: str):
@@ -144,9 +148,54 @@ class Consumer:
 
         data: dict[str, Any] = {"to": message.to_addr}
 
-        if "document" in message.helper_metadata:
+        if "buttons" in message.helper_metadata:
+            options = message.helper_metadata["buttons"]
+            data["type"] = "interactive"
+            data["interactive"] = {
+                "type": "button",
+                "body": {"text": message.content or ""},
+                "action": {
+                    "buttons": [
+                        {"type": "reply", "reply": {"title": option[:20]}}
+                        for option in options[:3]
+                    ],
+                },
+            }
+            if "header" in message.helper_metadata:
+                header = message.helper_metadata["header"]
+                if valid_url(header):
+                    media_id, content_type = await self.get_media_id(header)
+                    if content_type in ("image/jpeg", "image/png"):
+                        data["interactive"]["header"] = {
+                            "type": "image",
+                            "image": {"id": media_id},
+                        }
+                    elif content_type in ("video/mp4", "video/3gpp"):
+                        data["interactive"]["header"] = {
+                            "type": "video",
+                            "video": {"id": media_id},
+                        }
+                    else:
+                        data["interactive"]["header"] = {
+                            "type": "document",
+                            "document": {
+                                "id": media_id,
+                                "filename": self._extract_filename(header),
+                            },
+                        }
+                else:
+                    data["interactive"]["header"] = {
+                        "type": "text",
+                        "text": header[:60],
+                    }
+            if "footer" in message.helper_metadata:
+                data["interactive"]["footer"] = {
+                    "text": message.helper_metadata["footer"][:60]
+                }
+        # TODO: list
+        elif "document" in message.helper_metadata:
             document_url = message.helper_metadata["document"]
-            media_id = await self.get_media_id(document_url)
+            media_id, _ = await self.get_media_id(document_url)
             data["type"] = "document"
             data["document"] = {
                 "id": media_id,
