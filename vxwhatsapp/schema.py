@@ -42,6 +42,7 @@ whatsapp_webhook_schema = {
                         "contacts",
                         "document",
                         "image",
+                        "interactive",
                         "location",
                         "sticker",
                         "system",
@@ -75,6 +76,40 @@ whatsapp_webhook_schema = {
                 },
                 "image": {
                     "$ref": "#/definitions/media",
+                },
+                "interactive": {
+                    "type": "object",
+                    "properties": {
+                        "type": {
+                            "type": "string",
+                            "enum": ["list_reply", "button_reply"],
+                        },
+                        "list_reply": {
+                            "type": "object",
+                            "properties": {
+                                "id": {"type": "string"},
+                                "title": {"type": "string"},
+                                "description": {"type": "string"},
+                            },
+                        },
+                        "button_reply": {
+                            "type": "object",
+                            "properties": {
+                                "id": {"type": "string"},
+                                "title": {"type": "string"},
+                            },
+                        },
+                    },
+                    "allOf": [
+                        {
+                            "if": {"properties": {"type": {"const": "list_reply"}}},
+                            "then": {"required": ["list_reply"]},
+                        },
+                        {
+                            "if": {"properties": {"type": {"const": "button_reply"}}},
+                            "then": {"required": ["button_reply"]},
+                        },
+                    ],
                 },
                 "document": {
                     "$ref": "#/definitions/media",
@@ -114,6 +149,10 @@ whatsapp_webhook_schema = {
                 {
                     "if": {"properties": {"type": {"const": "image"}}},
                     "then": {"required": ["image"]},
+                },
+                {
+                    "if": {"properties": {"type": {"const": "interactive"}}},
+                    "then": {"required": ["interactive"]},
                 },
                 {
                     "if": {"properties": {"type": {"const": "location"}}},

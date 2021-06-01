@@ -458,3 +458,71 @@ async def test_duplicate_message_no_redis(test_client):
 
     await test_client.post(url, headers=headers, data=data)
     await get_amqp_message(queue)
+
+
+async def test_valid_interactive_list_reply_message(test_client):
+    """
+    Should put the list item as the message content
+    """
+    queue = await setup_amqp_queue(test_client.app.amqp_connection)
+    data = ujson.dumps(
+        {
+            "messages": [
+                {
+                    "from": "27820001001",
+                    "id": "abc132",
+                    "timestamp": "123456789",
+                    "type": "interactive",
+                    "interactive": {
+                        "type": "list_reply",
+                        "list_reply": {"title": "test response"},
+                    },
+                }
+            ]
+        }
+    )
+    response = await test_client.post(
+        app.url_for("whatsapp.whatsapp_webhook"),
+        headers={"X-Turn-Hook-Signature": generate_hmac_signature(data, "testsecret")},
+        data=data,
+    )
+    assert response.status == 200
+    assert (await response.json()) == {}
+
+    message = await get_amqp_message(queue)
+    message = Message.from_json(message.body.decode("utf-8"))
+    assert message.content == "test response"
+
+
+async def test_valid_interactive_button_reply_message(test_client):
+    """
+    Should put the button text as the message content
+    """
+    queue = await setup_amqp_queue(test_client.app.amqp_connection)
+    data = ujson.dumps(
+        {
+            "messages": [
+                {
+                    "from": "27820001001",
+                    "id": "abc133",
+                    "timestamp": "123456789",
+                    "type": "interactive",
+                    "interactive": {
+                        "type": "button_reply",
+                        "button_reply": {"title": "test response"},
+                    },
+                }
+            ]
+        }
+    )
+    response = await test_client.post(
+        app.url_for("whatsapp.whatsapp_webhook"),
+        headers={"X-Turn-Hook-Signature": generate_hmac_signature(data, "testsecret")},
+        data=data,
+    )
+    assert response.status == 200
+    assert (await response.json()) == {}
+
+    message = await get_amqp_message(queue)
+    message = Message.from_json(message.body.decode("utf-8"))
+    assert message.content == "test response"

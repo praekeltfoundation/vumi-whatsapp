@@ -57,6 +57,11 @@ async def whatsapp_webhook(request: Request) -> HTTPResponse:
             content = msg["location"].pop("name", None)
         elif msg["type"] == "button":
             content = msg["button"].pop("text")
+        elif msg["type"] == "interactive":
+            if msg["interactive"]["type"] == "list_reply":
+                content = msg["interactive"]["list_reply"].pop("title")
+            else:
+                content = msg["interactive"]["button_reply"].pop("title")
         elif msg["type"] in ("unknown", "contacts"):
             content = None
         else:
