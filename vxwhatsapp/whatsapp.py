@@ -30,7 +30,7 @@ async def dedupe_and_publish_message(request, message):
         return await publish_message(request, message)
     lock_key = f"msglock:{message.message_id}"
     seen_key = f"msgseen:{message.message_id}"
-    lock = request.app.redis.lock(lock_key, timeout=0.5, blocking_timeout=1.0)
+    lock = request.app.redis.lock(lock_key, timeout=1.0, blocking_timeout=2.0)
     async with lock:
         if await request.app.redis.get(seen_key) is not None:
             return
