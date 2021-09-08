@@ -153,7 +153,7 @@ class Consumer:
             data["type"] = "interactive"
             data["interactive"] = {
                 "type": "button",
-                "body": {"text": message.content or ""},
+                "body": {"text": (message.content or "")[:1024]},
                 "action": {
                     "buttons": [
                         {
@@ -199,7 +199,7 @@ class Consumer:
             data["type"] = "interactive"
             data["interactive"] = {
                 "type": "list",
-                "body": {"text": message.content or ""},
+                "body": {"text": (message.content or "")[:1024]},
                 "action": {
                     "button": message.helper_metadata["button"][:20],
                     "sections": message.helper_metadata["sections"][:10],
