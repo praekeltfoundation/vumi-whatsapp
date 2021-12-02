@@ -72,6 +72,10 @@ def media_mock_server(loop, sanic_client):
     async def test_document(request):
         return text("test_document")
 
+    @app.route("test_image.jpeg", methods=["GET"])
+    async def test_image(request):
+        return text("test_image")
+
     return loop.run_until_complete(sanic_client(app))
 
 
@@ -248,6 +252,39 @@ async def test_outbound_document_cached(whatsapp_mock_server, test_client):
     assert request.json == {
         "type": "document",
         "document": {"id": "test-media-id", "filename": "cached &.pdf"},
+        "to": "27820001001",
+    }
+
+
+async def test_outbound_image(whatsapp_mock_server, media_mock_server, test_client):
+    """
+    Should upload the image, and then send the message with the media ID
+    """
+    test_client.app.consumer.message_url = (
+        f"http://{whatsapp_mock_server.host}:{whatsapp_mock_server.port}"
+        "/v1/messages/"
+    )
+    test_client.app.consumer.media_url = (
+        f"http://{whatsapp_mock_server.host}:{whatsapp_mock_server.port}/v1/media"
+    )
+    image_url = (
+        f"http://{media_mock_server.host}:{media_mock_server.port}/test_image.jpeg"
+    )
+    await send_outbound_message(
+        test_client.app.amqp_connection,
+        Message(
+            content="test caption",
+            to_addr="27820001001",
+            from_addr="27820001002",
+            transport_name="whatsapp",
+            transport_type=Message.TRANSPORT_TYPE.HTTP_API,
+            helper_metadata={"image": image_url},
+        ),
+    )
+    request = await whatsapp_mock_server.app.future
+    assert request.json == {
+        "type": "image",
+        "image": {"id": "test-media-id", "caption": "test caption"},
         "to": "27820001001",
     }
 

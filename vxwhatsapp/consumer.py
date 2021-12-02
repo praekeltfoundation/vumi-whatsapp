@@ -222,6 +222,13 @@ class Consumer:
                 "id": media_id,
                 "filename": self._extract_filename(document_url),
             }
+        elif "image" in message.helper_metadata:
+            image_url = message.helper_metadata["image"]
+            media_id, _ = await self.get_media_id(image_url)
+            data["type"] = "image"
+            data["image"] = {"id": media_id}
+            if message.content:
+                data["image"]["caption"] = message.content
         else:
             data["text"] = {"body": message.content or ""}
 
