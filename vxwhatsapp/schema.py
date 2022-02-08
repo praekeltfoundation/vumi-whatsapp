@@ -10,7 +10,7 @@ whatsapp_webhook_schema = {
         "media": {
             "type": "object",
             "properties": {
-                "caption": {"type": "string"},
+                "caption": {"type": ["string", "null"]},
                 "id": {"type": "string"},
                 "metadata": {"type": "object"},
                 "mime_type": {"type": "string"},

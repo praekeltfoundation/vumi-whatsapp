@@ -374,6 +374,42 @@ async def test_valid_media_message(test_client):
     assert message.content == "test caption"
 
 
+async def test_valid_media_message_null_caption(test_client):
+    """
+    Should have null message content
+    """
+    queue = await setup_amqp_queue(test_client.app.amqp_connection)
+    data = ujson.dumps(
+        {
+            "messages": [
+                {
+                    "from": "27820001001",
+                    "id": "abc128",
+                    "timestamp": "123456789",
+                    "type": "image",
+                    "image": {
+                        "id": "abc123",
+                        "caption": None,
+                        "mime_type": "image/png",
+                        "sha256": "hash",
+                    },
+                }
+            ]
+        }
+    )
+    response = await test_client.post(
+        app.url_for("whatsapp.whatsapp_webhook"),
+        headers={"X-Turn-Hook-Signature": generate_hmac_signature(data, "testsecret")},
+        data=data,
+    )
+    assert response.status == 200
+    assert (await response.json()) == {}
+
+    message = await get_amqp_message(queue)
+    message = Message.from_json(message.body.decode("utf-8"))
+    assert message.content is None
+
+
 async def test_valid_event(test_client):
     queue = await setup_amqp_queue(test_client.app.amqp_connection, "whatsapp.event")
     data = ujson.dumps(
