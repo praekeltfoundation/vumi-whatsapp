@@ -10,6 +10,7 @@ from aioredis import Redis, from_url
 from vxwhatsapp import config
 from vxwhatsapp.models import Message
 from vxwhatsapp.publisher import Publisher
+from vxwhatsapp.tests.utils import cleanup_amqp, cleanup_redis
 
 
 @pytest.fixture
@@ -17,6 +18,7 @@ async def amqp() -> AsyncGenerator[Connection, None]:
     conn: Connection = await connect_robust(config.AMQP_URL)
     yield conn
     await conn.close()
+    await cleanup_amqp()
 
 
 @pytest.fixture
@@ -26,6 +28,7 @@ async def redis() -> AsyncGenerator[Redis, None]:
     )
     yield conn
     await conn.close()
+    await cleanup_redis()
 
 
 async def setup_amqp_queue(amqp: Connection, queuename="whatsapp.inbound") -> Queue:

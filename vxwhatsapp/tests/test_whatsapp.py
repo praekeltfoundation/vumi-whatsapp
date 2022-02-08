@@ -10,7 +10,17 @@ from aio_pika.exceptions import QueueEmpty
 
 from vxwhatsapp.main import app
 from vxwhatsapp.models import Event, Message
+from vxwhatsapp.tests.utils import cleanup_amqp, cleanup_redis
 from vxwhatsapp.whatsapp import config
+
+
+@pytest.fixture(autouse=True)
+async def cleanup():
+    """
+    Ensure that we always cleanup redis and amqp
+    """
+    await cleanup_amqp()
+    await cleanup_redis()
 
 
 @pytest.fixture

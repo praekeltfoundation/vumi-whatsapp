@@ -2,6 +2,16 @@ import pytest
 
 from vxwhatsapp import config
 from vxwhatsapp.main import app
+from vxwhatsapp.tests.utils import cleanup_amqp, cleanup_redis
+
+
+@pytest.fixture(autouse=True)
+async def cleanup():
+    """
+    Ensure that we always cleanup redis and amqp
+    """
+    await cleanup_amqp()
+    await cleanup_redis()
 
 
 @pytest.fixture
