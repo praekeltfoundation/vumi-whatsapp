@@ -146,7 +146,7 @@ class Consumer:
                     headers["Accept"] = "application/vnd.v1+json"
                 await delete_conversation_claim(self.redis, claim, message.to_addr)
 
-        data: dict[str, Any] = {"to": message.to_addr}
+        data: Dict[str, Any] = {"to": message.to_addr}
 
         if "buttons" in message.helper_metadata:
             options = message.helper_metadata["buttons"]

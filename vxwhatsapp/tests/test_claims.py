@@ -5,6 +5,7 @@ from aioredis import Redis, from_url
 
 from vxwhatsapp import config
 from vxwhatsapp.claims import delete_conversation_claim, store_conversation_claim
+from vxwhatsapp.tests.utils import cleanup_redis
 
 
 @pytest.fixture
@@ -14,6 +15,7 @@ async def redis() -> AsyncGenerator[Redis, None]:
     )
     yield conn
     await conn.close()
+    await cleanup_redis()
 
 
 async def test_store_missing_parameters(redis):
