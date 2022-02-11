@@ -37,7 +37,7 @@ def generate_hmac_signature(body: str, secret: str) -> str:
 
 async def test_missing_signature(test_client):
     response = await test_client.post(app.url_for("whatsapp.whatsapp_webhook"))
-    assert response.status == 401
+    assert response.status_code == 401
 
 
 async def test_invalid_signature(test_client):
@@ -45,7 +45,7 @@ async def test_invalid_signature(test_client):
         app.url_for("whatsapp.whatsapp_webhook"),
         headers={"X-Turn-Hook-Signature": "incorrect"},
     )
-    assert response.status == 403
+    assert response.status_code == 403
 
 
 async def test_no_secret_config(test_client):
@@ -54,7 +54,7 @@ async def test_no_secret_config(test_client):
     """
     config.HMAC_SECRET = None
     response = await test_client.post(app.url_for("whatsapp.whatsapp_webhook"))
-    assert response.status == 400
+    assert response.status_code == 400
 
 
 async def test_valid_signature(test_client):
@@ -75,10 +75,8 @@ async def test_valid_signature(test_client):
         headers={"X-Turn-Hook-Signature": generate_hmac_signature(data, "testsecret")},
         data=data,
     )
-    assert response.status == 400
-    assert (await response.json()) == {
-        "messages": {"0": ["'text' is a required property"]}
-    }
+    assert response.status_code == 400
+    assert response.json() == {"messages": {"0": ["'text' is a required property"]}}
 
 
 async def setup_amqp_queue(connection: Connection, queuename="whatsapp.inbound"):
@@ -118,8 +116,8 @@ async def test_valid_text_message(test_client):
         },
         data=data,
     )
-    assert response.status == 200
-    assert (await response.json()) == {}
+    assert response.status_code == 200
+    assert response.json() == {}
 
     message = await get_amqp_message(queue)
     message = Message.from_json(message.body.decode("utf-8"))
@@ -155,8 +153,8 @@ async def test_valid_unknown_message(test_client):
         },
         data=data,
     )
-    assert response.status == 200
-    assert (await response.json()) == {}
+    assert response.status_code == 200
+    assert response.json() == {}
 
     message = await get_amqp_message(queue)
     message = Message.from_json(message.body.decode("utf-8"))
@@ -198,8 +196,8 @@ async def test_valid_contacts_message(test_client):
         },
         data=data,
     )
-    assert response.status == 200
-    assert (await response.json()) == {}
+    assert response.status_code == 200
+    assert response.json() == {}
 
     message = await get_amqp_message(queue)
     message = Message.from_json(message.body.decode("utf-8"))
@@ -236,8 +234,8 @@ async def test_text_message_conversation_claim_redis(test_client):
         },
         data=data,
     )
-    assert response.status == 200
-    assert (await response.json()) == {}
+    assert response.status_code == 200
+    assert response.json() == {}
 
     await get_amqp_message(queue)
     [address] = await test_client.app.redis.zrange("claims", 0, -1)
@@ -265,8 +263,8 @@ async def test_ignore_system_messages(test_client):
         headers={"X-Turn-Hook-Signature": generate_hmac_signature(data, "testsecret")},
         data=data,
     )
-    assert response.status == 200
-    assert (await response.json()) == {}
+    assert response.status_code == 200
+    assert response.json() == {}
 
     exception = None
     try:
@@ -299,8 +297,8 @@ async def test_valid_location_message(test_client):
         headers={"X-Turn-Hook-Signature": generate_hmac_signature(data, "testsecret")},
         data=data,
     )
-    assert response.status == 200
-    assert (await response.json()) == {}
+    assert response.status_code == 200
+    assert response.json() == {}
 
     message = await get_amqp_message(queue)
     message = Message.from_json(message.body.decode("utf-8"))
@@ -330,8 +328,8 @@ async def test_valid_button_message(test_client):
         headers={"X-Turn-Hook-Signature": generate_hmac_signature(data, "testsecret")},
         data=data,
     )
-    assert response.status == 200
-    assert (await response.json()) == {}
+    assert response.status_code == 200
+    assert response.json() == {}
 
     message = await get_amqp_message(queue)
     message = Message.from_json(message.body.decode("utf-8"))
@@ -366,8 +364,8 @@ async def test_valid_media_message(test_client):
         headers={"X-Turn-Hook-Signature": generate_hmac_signature(data, "testsecret")},
         data=data,
     )
-    assert response.status == 200
-    assert (await response.json()) == {}
+    assert response.status_code == 200
+    assert response.json() == {}
 
     message = await get_amqp_message(queue)
     message = Message.from_json(message.body.decode("utf-8"))
@@ -402,8 +400,8 @@ async def test_valid_media_message_null_caption(test_client):
         headers={"X-Turn-Hook-Signature": generate_hmac_signature(data, "testsecret")},
         data=data,
     )
-    assert response.status == 200
-    assert (await response.json()) == {}
+    assert response.status_code == 200
+    assert response.json() == {}
 
     message = await get_amqp_message(queue)
     message = Message.from_json(message.body.decode("utf-8"))
@@ -429,8 +427,8 @@ async def test_valid_event(test_client):
         headers={"X-Turn-Hook-Signature": generate_hmac_signature(data, "testsecret")},
         data=data,
     )
-    assert response.status == 200
-    assert (await response.json()) == {}
+    assert response.status_code == 200
+    assert response.json() == {}
 
     message = await get_amqp_message(queue)
     event = Event.from_json(message.body.decode("utf-8"))
@@ -532,8 +530,8 @@ async def test_valid_interactive_list_reply_message(test_client):
         headers={"X-Turn-Hook-Signature": generate_hmac_signature(data, "testsecret")},
         data=data,
     )
-    assert response.status == 200
-    assert (await response.json()) == {}
+    assert response.status_code == 200
+    assert response.json() == {}
 
     message = await get_amqp_message(queue)
     message = Message.from_json(message.body.decode("utf-8"))
@@ -566,8 +564,8 @@ async def test_valid_interactive_button_reply_message(test_client):
         headers={"X-Turn-Hook-Signature": generate_hmac_signature(data, "testsecret")},
         data=data,
     )
-    assert response.status == 200
-    assert (await response.json()) == {}
+    assert response.status_code == 200
+    assert response.json() == {}
 
     message = await get_amqp_message(queue)
     message = Message.from_json(message.body.decode("utf-8"))

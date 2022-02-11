@@ -117,7 +117,7 @@ async def whatsapp_webhook(request: Request) -> HTTPResponse:
             delivery_status=delivery_status,
             helper_metadata=ev,
         )
-        tasks.append(request.app.publisher.publish_event(event))
+        tasks.append(request.app.publisher.publish_event(event))  # type: ignore
 
     await gather(*tasks)
     return json({})
