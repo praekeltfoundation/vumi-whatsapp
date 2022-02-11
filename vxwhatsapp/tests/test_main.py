@@ -29,8 +29,8 @@ async def test_client_no_redis(sanic_client):
 
 async def test_health(test_client):
     response = await test_client.get(app.url_for("health"))
-    assert response.status == 200
-    data = await response.json()
+    assert response.status_code == 200
+    data = response.json()
     assert isinstance(data["amqp"].pop("time_since_last_heartbeat"), float)
     assert isinstance(data["redis"].pop("response_time"), float)
     assert data == {
@@ -42,8 +42,8 @@ async def test_health(test_client):
 
 async def test_health_no_redis(test_client_no_redis):
     response = await test_client_no_redis.get(app.url_for("health"))
-    assert response.status == 200
-    data = await response.json()
+    assert response.status_code == 200
+    data = response.json()
     assert isinstance(data["amqp"].pop("time_since_last_heartbeat"), float)
     assert data == {
         "status": "ok",
@@ -53,6 +53,5 @@ async def test_health_no_redis(test_client_no_redis):
 
 async def test_metrics(test_client):
     response = await test_client.get(app.url_for("metrics"))
-    assert response.status == 200
-    body = await response.text()
-    assert "sanic_request_latency_sec" in body
+    assert response.status_code == 200
+    assert "sanic_request_latency_sec" in response.text
