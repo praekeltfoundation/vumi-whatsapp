@@ -203,7 +203,7 @@ async def test_invalid_outbound_text_message(test_client):
     logger.addHandler(logging.StreamHandler(log_stream))
     await send_outbound_amqp_message(test_client.app.amqp_connection, b"invalid")
     assert "Invalid message body b'invalid'" in log_stream.getvalue()
-    assert "ValueError" in log_stream.getvalue()
+    assert "JSONDecodeError" in log_stream.getvalue()
 
 
 async def test_outbound_document(whatsapp_mock_server, media_mock_server, test_client):
