@@ -1,7 +1,7 @@
 import time
 
 import aio_pika
-import aioredis
+import redis.asyncio as aioredis
 import sentry_sdk
 from prometheus_client import CONTENT_TYPE_LATEST
 from prometheus_client.exposition import generate_latest

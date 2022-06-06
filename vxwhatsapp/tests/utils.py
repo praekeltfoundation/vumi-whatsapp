@@ -1,4 +1,4 @@
-import aioredis
+import redis.asyncio as aioredis
 from aio_pika import connect_robust
 
 from vxwhatsapp import config

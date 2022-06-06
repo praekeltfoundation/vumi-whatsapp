@@ -5,7 +5,7 @@ import pytest
 from aio_pika import Connection
 from aio_pika import Message as AMQPMessage
 from aio_pika import Queue, connect_robust
-from aioredis import Redis, from_url
+from redis.asyncio import Redis, from_url
 
 from vxwhatsapp import config
 from vxwhatsapp.models import Message

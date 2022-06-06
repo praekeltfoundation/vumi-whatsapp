@@ -3,7 +3,7 @@ import time
 
 from aio_pika import Connection, DeliveryMode, ExchangeType
 from aio_pika import Message as AMQPMessage
-from aioredis import Redis
+from redis.asyncio import Redis
 from sanic.log import logger
 
 from vxwhatsapp import config
