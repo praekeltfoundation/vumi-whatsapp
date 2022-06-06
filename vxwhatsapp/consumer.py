@@ -6,8 +6,8 @@ from urllib.parse import ParseResult, unquote_plus, urlparse, urlunparse
 import aiohttp
 import ujson
 from aio_pika import Connection, ExchangeType, IncomingMessage
-from aioredis import Redis
 from prometheus_client import Histogram
+from redis.asyncio import Redis
 from sanic.log import logger
 
 from vxwhatsapp import config
