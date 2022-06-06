@@ -2,11 +2,13 @@ import hmac
 from base64 import b64encode
 from datetime import datetime, timezone
 from hashlib import sha256
+from unittest import mock
 
 import pytest
 import ujson
 from aio_pika import Connection, Queue
 from aio_pika.exceptions import QueueEmpty
+from aioredis.exceptions import LockError
 
 from vxwhatsapp.main import app
 from vxwhatsapp.models import Event, Message
@@ -570,3 +572,32 @@ async def test_valid_interactive_button_reply_message(test_client):
     message = await get_amqp_message(queue)
     message = Message.from_json(message.body.decode("utf-8"))
     assert message.content == "test response"
+
+
+@mock.patch("vxwhatsapp.whatsapp.dedupe_and_publish_message")
+async def test_lock_timeout(dedupe_and_publish_message: mock.AsyncMock, test_client):
+    dedupe_and_publish_message.side_effect = LockError()
+    data = ujson.dumps(
+        {
+            "messages": [
+                {
+                    "from": "27820001001",
+                    "id": "abc121",
+                    "timestamp": "123456789",
+                    "type": "text",
+                    "text": {"body": "test"},
+                }
+            ]
+        }
+    )
+    response = await test_client.post(
+        app.url_for("whatsapp.whatsapp_webhook"),
+        headers={"X-Turn-Hook-Signature": generate_hmac_signature(data, "testsecret")},
+        data=data,
+    )
+    assert response.status_code == 504
+    assert response.json() == {
+        "code": 504,
+        "type": "Gateway Timeout",
+        "message": "Couldn't place the message on a queue within time limit",
+    }

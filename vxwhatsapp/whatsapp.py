@@ -1,6 +1,8 @@
 from asyncio import gather
 from datetime import datetime, timezone
+from logging import getLogger
 
+from aioredis.exceptions import LockError
 from sanic import Blueprint
 from sanic.request import Request
 from sanic.response import HTTPResponse, json
@@ -12,6 +14,7 @@ from vxwhatsapp.models import Event, Message
 from vxwhatsapp.schema import validate_schema, whatsapp_webhook_schema
 
 bp = Blueprint("whatsapp", version=1)
+logger = getLogger(__name__)
 
 
 async def publish_message(request, message):
@@ -121,3 +124,16 @@ async def whatsapp_webhook(request: Request) -> HTTPResponse:
 
     await gather(*tasks)
     return json({})
+
+
+@bp.exception(LockError)
+def handle_lock_errors(request: Request, exception: LockError) -> HTTPResponse:
+    logger.exception("Timing out request")
+    return json(
+        {
+            "code": 504,
+            "type": "Gateway Timeout",
+            "message": "Couldn't place the message on a queue within time limit",
+        },
+        status=504,
+    )
