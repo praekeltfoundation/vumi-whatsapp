@@ -93,9 +93,13 @@ class Consumer:
             await message.reject(requeue=False)
             return
 
-        async with message.process(requeue=True):
+        async with message.process():
             logger.debug(f"Processing outbound message {msg}")
-            await self.submit_message(msg)
+            try:
+                await self.submit_message(msg)
+            except aiohttp.ClientResponseError as e:
+                if e.status > 499:
+                    await message.reject(requeue=True)
 
     async def get_media_id(self, media_url):
         if media_url in self.media_cache:
