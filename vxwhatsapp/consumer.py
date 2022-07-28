@@ -9,6 +9,7 @@ from aio_pika import Connection, ExchangeType, IncomingMessage
 from prometheus_client import Histogram
 from redis.asyncio import Redis
 from sanic.log import logger
+from sentry_sdk import capture_exception
 
 from vxwhatsapp import config
 from vxwhatsapp.claims import delete_conversation_claim, store_conversation_claim
@@ -93,9 +94,18 @@ class Consumer:
             await message.reject(requeue=False)
             return
 
-        async with message.process(requeue=True):
+        async with message.process():
             logger.debug(f"Processing outbound message {msg}")
-            await self.submit_message(msg)
+            try:
+                await self.submit_message(msg)
+            except aiohttp.ClientResponseError as e:
+                if e.status > 499:
+                    await message.reject(requeue=True)
+                    return
+
+                capture_exception(e)
+            except Exception:
+                await message.reject(requeue=True)
 
     async def get_media_id(self, media_url):
         if media_url in self.media_cache:

@@ -38,11 +38,19 @@ def whatsapp_mock_server(loop, sanic_client):
     app.future = Future()
     app.contact_future = Future()
     app.message_status_code = 200
+    app.message_client_error_code = 400
+    app.request_count = 0
 
     @app.route("/v1/messages", methods=["POST"])
     async def messages(request):
         app.future.set_result(request)
-        return json({}, status=app.message_status_code)
+        app.request_count += 1
+
+        status_code = app.message_status_code
+        if request.json["to"] == "27820001003":
+            status_code = app.message_client_error_code
+
+        return json({}, status=status_code)
 
     @app.route("/v1/messages/<message_id>/automation", methods=["POST"])
     async def message_automation(request, message_id):
@@ -134,6 +142,30 @@ async def test_outbound_text_message(whatsapp_mock_server, test_client):
     [addr] = await test_client.app.redis.zrange("claims", 0, -1)
     assert addr == "27820001001"
     await test_client.app.redis.delete("claims")
+
+
+async def test_outbound_text_message_client_error(whatsapp_mock_server, test_client):
+    """
+    Should make a request to the whatsapp API, but not retry for a client error
+    """
+    test_client.app.consumer.message_url = (
+        f"http://{whatsapp_mock_server.host}:{whatsapp_mock_server.port}/v1/messages"
+    )
+    await send_outbound_message(
+        test_client.app.amqp_connection,
+        Message(
+            to_addr="27820001003",
+            from_addr="27820001002",
+            transport_name="whatsapp",
+            transport_type=Message.TRANSPORT_TYPE.HTTP_API,
+            transport_metadata={},
+            content="test message 2",
+        ),
+    )
+    request = await whatsapp_mock_server.app.future
+    assert request.json == {"text": {"body": "test message 2"}, "to": "27820001003"}
+
+    assert whatsapp_mock_server.app.request_count == 1
 
 
 async def test_outbound_text_end_session(whatsapp_mock_server, test_client):
