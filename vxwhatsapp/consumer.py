@@ -207,6 +207,12 @@ class Consumer:
                 }
         elif "sections" in message.helper_metadata:
             data["type"] = "interactive"
+
+            for section in message.helper_metadata["sections"]:
+                for row in section["rows"]:
+                    row["id"] = row["id"][:200]
+                    row["title"] = row["title"][:24]
+
             data["interactive"] = {
                 "type": "list",
                 "body": {"text": (message.content or "")[:1024]},
