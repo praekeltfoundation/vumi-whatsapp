@@ -619,7 +619,6 @@ async def test_list(whatsapp_mock_server, test_client):
     }
 
 
-
 async def test_list_limits(whatsapp_mock_server, test_client):
     """
     Should submit a message with the requested list, header, and footer
