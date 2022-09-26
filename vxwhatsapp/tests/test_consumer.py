@@ -617,3 +617,50 @@ async def test_list(whatsapp_mock_server, test_client):
             "footer": {"text": "test footer"},
         },
     }
+
+
+async def test_list_limits(whatsapp_mock_server, test_client):
+    """
+    Should submit a message with the requested list, header, and footer
+    """
+    test_client.app.consumer.message_url = (
+        f"http://{whatsapp_mock_server.host}:{whatsapp_mock_server.port}"
+        "/v1/messages/"
+    )
+    await send_outbound_message(
+        test_client.app.amqp_connection,
+        Message(
+            to_addr="27820001001",
+            from_addr="27820001002",
+            transport_name="whatsapp",
+            transport_type=Message.TRANSPORT_TYPE.HTTP_API,
+            content="test body " * 150,
+            helper_metadata={
+                "button": "test button " * 10,
+                "sections": [
+                    {
+                        "title": "s1",
+                        "rows": [
+                            {
+                                "id": "id " * 200,
+                                "title": "title " * 6,
+                                "description": "row 1",
+                            },
+                        ],
+                    }
+                ],
+                "header": "test header" * 7,
+                "footer": "test footer" * 7,
+            },
+        ),
+    )
+    request = await whatsapp_mock_server.app.future
+
+    action = request.json["interactive"]["action"]
+    assert len(action["button"]) == 20
+    assert len(action["sections"][0]["rows"][0]["id"]) == 200
+    assert len(action["sections"][0]["rows"][0]["title"]) == 24
+
+    assert len(request.json["interactive"]["body"]["text"]) == 1024
+    assert len(request.json["interactive"]["header"]["text"]) == 60
+    assert len(request.json["interactive"]["footer"]["text"]) == 60
