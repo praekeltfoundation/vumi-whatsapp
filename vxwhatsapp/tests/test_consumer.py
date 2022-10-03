@@ -290,7 +290,10 @@ async def test_outbound_document_cached(whatsapp_mock_server, app_server):
         "/v1/messages/"
     )
     doc_url = "http://example/org/cached+%26.pdf"
-    app_server.app.ctx.consumer.media_cache[doc_url] = ("test-media-id", "application/pdf")
+    app_server.app.ctx.consumer.media_cache[doc_url] = (
+        "test-media-id",
+        "application/pdf",
+    )
     await send_outbound_message(
         app_server.app.ctx.amqp_connection,
         Message(
