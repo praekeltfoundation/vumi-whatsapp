@@ -4,30 +4,25 @@ from datetime import datetime, timezone
 from hashlib import sha256
 
 import pytest
+import pytest_asyncio
 import ujson
 from aio_pika import Connection, Queue
 from aio_pika.exceptions import QueueEmpty
 
 from vxwhatsapp.main import app
 from vxwhatsapp.models import Event, Message
-from vxwhatsapp.tests.utils import cleanup_amqp, cleanup_redis
+from vxwhatsapp.tests.utils import cleanup_amqp, cleanup_redis, run_sanic
 from vxwhatsapp.whatsapp import config
 
 
-@pytest.fixture(autouse=True)
-async def cleanup():
-    """
-    Ensure that we always cleanup redis and amqp
-    """
-    await cleanup_amqp()
-    await cleanup_redis()
-
-
-@pytest.fixture
-def test_client(loop, sanic_client):
+@pytest_asyncio.fixture
+async def app_server():
     config.REDIS_URL = config.REDIS_URL or "redis://"
     config.HMAC_SECRET = "testsecret"
-    return loop.run_until_complete(sanic_client(app))
+    async with run_sanic(app) as server:
+        yield server
+    await cleanup_amqp()
+    await cleanup_redis()
 
 
 def generate_hmac_signature(body: str, secret: str) -> str:
@@ -35,29 +30,33 @@ def generate_hmac_signature(body: str, secret: str) -> str:
     return b64encode(h.digest()).decode()
 
 
-async def test_missing_signature(test_client):
-    response = await test_client.post(app.url_for("whatsapp.whatsapp_webhook"))
+@pytest.mark.asyncio
+async def test_missing_signature(app_server):
+    response = await app_server.post(app.url_for("whatsapp.whatsapp_webhook"))
     assert response.status_code == 401
 
 
-async def test_invalid_signature(test_client):
-    response = await test_client.post(
+@pytest.mark.asyncio
+async def test_invalid_signature(app_server):
+    response = await app_server.post(
         app.url_for("whatsapp.whatsapp_webhook"),
         headers={"X-Turn-Hook-Signature": "incorrect"},
     )
     assert response.status_code == 403
 
 
-async def test_no_secret_config(test_client):
+@pytest.mark.asyncio
+async def test_no_secret_config(app_server):
     """
     If no secret is configured, then skip auth check
     """
     config.HMAC_SECRET = None
-    response = await test_client.post(app.url_for("whatsapp.whatsapp_webhook"))
+    response = await app_server.post(app.url_for("whatsapp.whatsapp_webhook"))
     assert response.status_code == 400
 
 
-async def test_valid_signature(test_client):
+@pytest.mark.asyncio
+async def test_valid_signature(app_server):
     data = ujson.dumps(
         {
             "messages": [
@@ -70,7 +69,7 @@ async def test_valid_signature(test_client):
             ]
         }
     )
-    response = await test_client.post(
+    response = await app_server.post(
         app.url_for("whatsapp.whatsapp_webhook"),
         headers={"X-Turn-Hook-Signature": generate_hmac_signature(data, "testsecret")},
         data=data,
@@ -93,8 +92,9 @@ async def get_amqp_message(queue: Queue):
     return message
 
 
-async def test_valid_text_message(test_client):
-    queue = await setup_amqp_queue(test_client.app.amqp_connection)
+@pytest.mark.asyncio
+async def test_valid_text_message(app_server):
+    queue = await setup_amqp_queue(app_server.app.amqp_connection)
     data = ujson.dumps(
         {
             "messages": [
@@ -108,7 +108,7 @@ async def test_valid_text_message(test_client):
             ]
         }
     )
-    response = await test_client.post(
+    response = await app_server.post(
         app.url_for("whatsapp.whatsapp_webhook"),
         headers={
             "X-Turn-Hook-Signature": generate_hmac_signature(data, "testsecret"),
@@ -132,8 +132,9 @@ async def test_valid_text_message(test_client):
     }
 
 
-async def test_valid_unknown_message(test_client):
-    queue = await setup_amqp_queue(test_client.app.amqp_connection)
+@pytest.mark.asyncio
+async def test_valid_unknown_message(app_server):
+    queue = await setup_amqp_queue(app_server.app.amqp_connection)
     data = ujson.dumps(
         {
             "messages": [
@@ -146,7 +147,7 @@ async def test_valid_unknown_message(test_client):
             ]
         }
     )
-    response = await test_client.post(
+    response = await app_server.post(
         app.url_for("whatsapp.whatsapp_webhook"),
         headers={
             "X-Turn-Hook-Signature": generate_hmac_signature(data, "testsecret"),
@@ -165,8 +166,9 @@ async def test_valid_unknown_message(test_client):
     assert message.transport_metadata["message"] == {"type": "unknown"}
 
 
-async def test_valid_contacts_message(test_client):
-    queue = await setup_amqp_queue(test_client.app.amqp_connection)
+@pytest.mark.asyncio
+async def test_valid_contacts_message(app_server):
+    queue = await setup_amqp_queue(app_server.app.amqp_connection)
     contact = {
         "addresses": [],
         "emails": [],
@@ -189,7 +191,7 @@ async def test_valid_contacts_message(test_client):
             ]
         }
     )
-    response = await test_client.post(
+    response = await app_server.post(
         app.url_for("whatsapp.whatsapp_webhook"),
         headers={
             "X-Turn-Hook-Signature": generate_hmac_signature(data, "testsecret"),
@@ -211,8 +213,9 @@ async def test_valid_contacts_message(test_client):
     }
 
 
-async def test_text_message_conversation_claim_redis(test_client):
-    queue = await setup_amqp_queue(test_client.app.amqp_connection)
+@pytest.mark.asyncio
+async def test_text_message_conversation_claim_redis(app_server):
+    queue = await setup_amqp_queue(app_server.app.amqp_connection)
     data = ujson.dumps(
         {
             "messages": [
@@ -226,7 +229,7 @@ async def test_text_message_conversation_claim_redis(test_client):
             ]
         }
     )
-    response = await test_client.post(
+    response = await app_server.post(
         app.url_for("whatsapp.whatsapp_webhook"),
         headers={
             "X-Turn-Hook-Signature": generate_hmac_signature(data, "testsecret"),
@@ -238,13 +241,14 @@ async def test_text_message_conversation_claim_redis(test_client):
     assert response.json() == {}
 
     await get_amqp_message(queue)
-    [address] = await test_client.app.redis.zrange("claims", 0, -1)
+    [address] = await app_server.app.redis.zrange("claims", 0, -1)
     assert address == "27820001001"
-    await test_client.app.redis.delete("claims")
+    await app_server.app.redis.delete("claims")
 
 
-async def test_ignore_system_messages(test_client):
-    queue = await setup_amqp_queue(test_client.app.amqp_connection)
+@pytest.mark.asyncio
+async def test_ignore_system_messages(app_server):
+    queue = await setup_amqp_queue(app_server.app.amqp_connection)
     data = ujson.dumps(
         {
             "messages": [
@@ -258,7 +262,7 @@ async def test_ignore_system_messages(test_client):
             ]
         }
     )
-    response = await test_client.post(
+    response = await app_server.post(
         app.url_for("whatsapp.whatsapp_webhook"),
         headers={"X-Turn-Hook-Signature": generate_hmac_signature(data, "testsecret")},
         data=data,
@@ -274,11 +278,12 @@ async def test_ignore_system_messages(test_client):
     assert exception is not None
 
 
-async def test_valid_location_message(test_client):
+@pytest.mark.asyncio
+async def test_valid_location_message(app_server):
     """
     Should put the name of the location as the message content
     """
-    queue = await setup_amqp_queue(test_client.app.amqp_connection)
+    queue = await setup_amqp_queue(app_server.app.amqp_connection)
     data = ujson.dumps(
         {
             "messages": [
@@ -292,7 +297,7 @@ async def test_valid_location_message(test_client):
             ]
         }
     )
-    response = await test_client.post(
+    response = await app_server.post(
         app.url_for("whatsapp.whatsapp_webhook"),
         headers={"X-Turn-Hook-Signature": generate_hmac_signature(data, "testsecret")},
         data=data,
@@ -305,11 +310,12 @@ async def test_valid_location_message(test_client):
     assert message.content == "test location"
 
 
-async def test_valid_button_message(test_client):
+@pytest.mark.asyncio
+async def test_valid_button_message(app_server):
     """
     Should put the button response as the message content
     """
-    queue = await setup_amqp_queue(test_client.app.amqp_connection)
+    queue = await setup_amqp_queue(app_server.app.amqp_connection)
     data = ujson.dumps(
         {
             "messages": [
@@ -323,7 +329,7 @@ async def test_valid_button_message(test_client):
             ]
         }
     )
-    response = await test_client.post(
+    response = await app_server.post(
         app.url_for("whatsapp.whatsapp_webhook"),
         headers={"X-Turn-Hook-Signature": generate_hmac_signature(data, "testsecret")},
         data=data,
@@ -336,11 +342,12 @@ async def test_valid_button_message(test_client):
     assert message.content == "test response"
 
 
-async def test_valid_media_message(test_client):
+@pytest.mark.asyncio
+async def test_valid_media_message(app_server):
     """
     Should put the media caption as the message content
     """
-    queue = await setup_amqp_queue(test_client.app.amqp_connection)
+    queue = await setup_amqp_queue(app_server.app.amqp_connection)
     data = ujson.dumps(
         {
             "messages": [
@@ -359,7 +366,7 @@ async def test_valid_media_message(test_client):
             ]
         }
     )
-    response = await test_client.post(
+    response = await app_server.post(
         app.url_for("whatsapp.whatsapp_webhook"),
         headers={"X-Turn-Hook-Signature": generate_hmac_signature(data, "testsecret")},
         data=data,
@@ -372,11 +379,12 @@ async def test_valid_media_message(test_client):
     assert message.content == "test caption"
 
 
-async def test_valid_media_message_null_caption(test_client):
+@pytest.mark.asyncio
+async def test_valid_media_message_null_caption(app_server):
     """
     Should have null message content
     """
-    queue = await setup_amqp_queue(test_client.app.amqp_connection)
+    queue = await setup_amqp_queue(app_server.app.amqp_connection)
     data = ujson.dumps(
         {
             "messages": [
@@ -395,7 +403,7 @@ async def test_valid_media_message_null_caption(test_client):
             ]
         }
     )
-    response = await test_client.post(
+    response = await app_server.post(
         app.url_for("whatsapp.whatsapp_webhook"),
         headers={"X-Turn-Hook-Signature": generate_hmac_signature(data, "testsecret")},
         data=data,
@@ -408,8 +416,9 @@ async def test_valid_media_message_null_caption(test_client):
     assert message.content is None
 
 
-async def test_valid_event(test_client):
-    queue = await setup_amqp_queue(test_client.app.amqp_connection, "whatsapp.event")
+@pytest.mark.asyncio
+async def test_valid_event(app_server):
+    queue = await setup_amqp_queue(app_server.app.amqp_connection, "whatsapp.event")
     data = ujson.dumps(
         {
             "statuses": [
@@ -422,7 +431,7 @@ async def test_valid_event(test_client):
             ]
         }
     )
-    response = await test_client.post(
+    response = await app_server.post(
         app.url_for("whatsapp.whatsapp_webhook"),
         headers={"X-Turn-Hook-Signature": generate_hmac_signature(data, "testsecret")},
         data=data,
@@ -440,8 +449,9 @@ async def test_valid_event(test_client):
     assert event.helper_metadata == {"recipient_id": "27820001001", "status": "read"}
 
 
-async def test_duplicate_message(test_client):
-    queue = await setup_amqp_queue(test_client.app.amqp_connection)
+@pytest.mark.asyncio
+async def test_duplicate_message(app_server):
+    queue = await setup_amqp_queue(app_server.app.amqp_connection)
     data = ujson.dumps(
         {
             "messages": [
@@ -461,10 +471,10 @@ async def test_duplicate_message(test_client):
     }
     url = app.url_for("whatsapp.whatsapp_webhook")
 
-    await test_client.post(url, headers=headers, data=data)
+    await app_server.post(url, headers=headers, data=data)
     await get_amqp_message(queue)
 
-    await test_client.post(url, headers=headers, data=data)
+    await app_server.post(url, headers=headers, data=data)
     err = None
     try:
         await get_amqp_message(queue)
@@ -473,12 +483,13 @@ async def test_duplicate_message(test_client):
     assert err is not None
 
 
-async def test_duplicate_message_no_redis(test_client):
+@pytest.mark.asyncio
+async def test_duplicate_message_no_redis(app_server):
     """
     If there's no redis configured, then we allow duplicate messages
     """
-    queue = await setup_amqp_queue(test_client.app.amqp_connection)
-    test_client.app.redis = None
+    queue = await setup_amqp_queue(app_server.app.amqp_connection)
+    app_server.app.redis = None
     data = ujson.dumps(
         {
             "messages": [
@@ -497,18 +508,19 @@ async def test_duplicate_message_no_redis(test_client):
         "X-Turn-Claim": "test-claim",
     }
     url = app.url_for("whatsapp.whatsapp_webhook")
-    await test_client.post(url, headers=headers, data=data)
+    await app_server.post(url, headers=headers, data=data)
     await get_amqp_message(queue)
 
-    await test_client.post(url, headers=headers, data=data)
+    await app_server.post(url, headers=headers, data=data)
     await get_amqp_message(queue)
 
 
-async def test_valid_interactive_list_reply_message(test_client):
+@pytest.mark.asyncio
+async def test_valid_interactive_list_reply_message(app_server):
     """
     Should put the list item as the message content
     """
-    queue = await setup_amqp_queue(test_client.app.amqp_connection)
+    queue = await setup_amqp_queue(app_server.app.amqp_connection)
     data = ujson.dumps(
         {
             "messages": [
@@ -525,7 +537,7 @@ async def test_valid_interactive_list_reply_message(test_client):
             ]
         }
     )
-    response = await test_client.post(
+    response = await app_server.post(
         app.url_for("whatsapp.whatsapp_webhook"),
         headers={"X-Turn-Hook-Signature": generate_hmac_signature(data, "testsecret")},
         data=data,
@@ -538,11 +550,12 @@ async def test_valid_interactive_list_reply_message(test_client):
     assert message.content == "test response"
 
 
-async def test_valid_interactive_button_reply_message(test_client):
+@pytest.mark.asyncio
+async def test_valid_interactive_button_reply_message(app_server):
     """
     Should put the button text as the message content
     """
-    queue = await setup_amqp_queue(test_client.app.amqp_connection)
+    queue = await setup_amqp_queue(app_server.app.amqp_connection)
     data = ujson.dumps(
         {
             "messages": [
@@ -559,7 +572,7 @@ async def test_valid_interactive_button_reply_message(test_client):
             ]
         }
     )
-    response = await test_client.post(
+    response = await app_server.post(
         app.url_for("whatsapp.whatsapp_webhook"),
         headers={"X-Turn-Hook-Signature": generate_hmac_signature(data, "testsecret")},
         data=data,

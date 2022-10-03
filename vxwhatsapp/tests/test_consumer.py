@@ -4,6 +4,7 @@ from asyncio import Future
 from io import StringIO
 
 import pytest
+import pytest_asyncio
 from aio_pika import Connection, DeliveryMode, ExchangeType
 from aio_pika import Message as AMQPMessage
 from sanic import Sanic
@@ -13,26 +14,20 @@ from sanic.response import json, text
 from vxwhatsapp import config
 from vxwhatsapp.main import app
 from vxwhatsapp.models import Message
-from vxwhatsapp.tests.utils import cleanup_amqp, cleanup_redis
+from vxwhatsapp.tests.utils import cleanup_amqp, cleanup_redis, run_sanic
 
 
-@pytest.fixture(autouse=True)
-async def cleanup():
-    """
-    Ensure that we always cleanup redis and amqp
-    """
+@pytest_asyncio.fixture
+async def app_server():
+    config.REDIS_URL = config.REDIS_URL or "redis://"
+    async with run_sanic(app) as server:
+        yield server
     await cleanup_amqp()
     await cleanup_redis()
 
 
-@pytest.fixture
-def test_client(loop, sanic_client):
-    config.REDIS_URL = config.REDIS_URL or "redis://"
-    return loop.run_until_complete(sanic_client(app))
-
-
-@pytest.fixture
-def whatsapp_mock_server(loop, sanic_client):
+@pytest_asyncio.fixture
+async def whatsapp_mock_server():
     Sanic.test_mode = True
     app = Sanic("mock_whatsapp")
     app.future = Future()
@@ -78,11 +73,12 @@ def whatsapp_mock_server(loop, sanic_client):
             }
         )
 
-    return loop.run_until_complete(sanic_client(app))
+    async with run_sanic(app) as server:
+        yield server
 
 
-@pytest.fixture
-def media_mock_server(loop, sanic_client):
+@pytest_asyncio.fixture
+async def media_mock_server():
     Sanic.test_mode = True
     app = Sanic("mock_media")
 
@@ -94,7 +90,8 @@ def media_mock_server(loop, sanic_client):
     async def test_image(request):
         return text("test_image")
 
-    return loop.run_until_complete(sanic_client(app))
+    async with run_sanic(app) as server:
+        yield server
 
 
 async def send_outbound_amqp_message(connection: Connection, message: bytes):
@@ -117,15 +114,16 @@ async def send_outbound_message(connection: Connection, message: Message):
     await send_outbound_amqp_message(connection, message.to_json().encode("utf-8"))
 
 
-async def test_outbound_text_message(whatsapp_mock_server, test_client):
+@pytest.mark.asyncio
+async def test_outbound_text_message(whatsapp_mock_server, app_server):
     """
     Should make a request to the whatsapp API, extending the conversation claim
     """
-    test_client.app.consumer.message_url = (
+    app_server.app.consumer.message_url = (
         f"http://{whatsapp_mock_server.host}:{whatsapp_mock_server.port}/v1/messages"
     )
     await send_outbound_message(
-        test_client.app.amqp_connection,
+        app_server.app.amqp_connection,
         Message(
             to_addr="27820001001",
             from_addr="27820001002",
@@ -139,20 +137,21 @@ async def test_outbound_text_message(whatsapp_mock_server, test_client):
     assert request.json == {"text": {"body": "test message"}, "to": "27820001001"}
     assert request.headers["X-Turn-Claim-Extend"] == "test-claim"
 
-    [addr] = await test_client.app.redis.zrange("claims", 0, -1)
+    [addr] = await app_server.app.redis.zrange("claims", 0, -1)
     assert addr == "27820001001"
-    await test_client.app.redis.delete("claims")
+    await app_server.app.redis.delete("claims")
 
 
-async def test_outbound_text_message_client_error(whatsapp_mock_server, test_client):
+@pytest.mark.asyncio
+async def test_outbound_text_message_client_error(whatsapp_mock_server, app_server):
     """
     Should make a request to the whatsapp API, but not retry for a client error
     """
-    test_client.app.consumer.message_url = (
+    app_server.app.consumer.message_url = (
         f"http://{whatsapp_mock_server.host}:{whatsapp_mock_server.port}/v1/messages"
     )
     await send_outbound_message(
-        test_client.app.amqp_connection,
+        app_server.app.amqp_connection,
         Message(
             to_addr="27820001003",
             from_addr="27820001002",
@@ -168,18 +167,19 @@ async def test_outbound_text_message_client_error(whatsapp_mock_server, test_cli
     assert whatsapp_mock_server.app.request_count == 1
 
 
-async def test_outbound_text_end_session(whatsapp_mock_server, test_client):
+@pytest.mark.asyncio
+async def test_outbound_text_end_session(whatsapp_mock_server, app_server):
     """
     Should make a request to the whatsapp API, releasing the conversation claim, and
     removing it from the set of open conversations
     """
-    redis = test_client.app.redis
-    test_client.app.consumer.message_url = (
+    redis = app_server.app.redis
+    app_server.app.consumer.message_url = (
         f"http://{whatsapp_mock_server.host}:{whatsapp_mock_server.port}/v1/messages"
     )
     await redis.zadd("claims", {"27820001001": int(time.time())})
     await send_outbound_message(
-        test_client.app.amqp_connection,
+        app_server.app.amqp_connection,
         Message(
             to_addr="27820001001",
             from_addr="27820001002",
@@ -198,16 +198,17 @@ async def test_outbound_text_end_session(whatsapp_mock_server, test_client):
     await redis.delete("claims")
 
 
-async def test_outbound_text_automation_handle(whatsapp_mock_server, test_client):
+@pytest.mark.asyncio
+async def test_outbound_text_automation_handle(whatsapp_mock_server, app_server):
     """
     Should make a request to the turn automation API to reevaluate
     """
-    test_client.app.consumer.message_automation_url = (
+    app_server.app.consumer.message_automation_url = (
         f"http://{whatsapp_mock_server.host}:{whatsapp_mock_server.port}"
         "/v1/messages/{}/automation"
     )
     await send_outbound_message(
-        test_client.app.amqp_connection,
+        app_server.app.amqp_connection,
         Message(
             to_addr="27820001001",
             from_addr="27820001002",
@@ -227,33 +228,35 @@ async def test_outbound_text_automation_handle(whatsapp_mock_server, test_client
     assert "/v1/messages/message-id/automation" in request.url
 
 
-async def test_invalid_outbound_text_message(test_client):
+@pytest.mark.asyncio
+async def test_invalid_outbound_text_message(app_server):
     """
     If the AMQP message is invalid, then drop it
     """
     log_stream = StringIO()
     logger.addHandler(logging.StreamHandler(log_stream))
-    await send_outbound_amqp_message(test_client.app.amqp_connection, b"invalid")
+    await send_outbound_amqp_message(app_server.app.amqp_connection, b"invalid")
     assert "Invalid message body b'invalid'" in log_stream.getvalue()
     assert "JSONDecodeError" in log_stream.getvalue()
 
 
-async def test_outbound_document(whatsapp_mock_server, media_mock_server, test_client):
+@pytest.mark.asyncio
+async def test_outbound_document(whatsapp_mock_server, media_mock_server, app_server):
     """
     Should upload the document, and then send the message with the media ID
     """
-    test_client.app.consumer.message_url = (
+    app_server.app.consumer.message_url = (
         f"http://{whatsapp_mock_server.host}:{whatsapp_mock_server.port}"
         "/v1/messages/"
     )
-    test_client.app.consumer.media_url = (
+    app_server.app.consumer.media_url = (
         f"http://{whatsapp_mock_server.host}:{whatsapp_mock_server.port}/v1/media"
     )
     document_url = (
         f"http://{media_mock_server.host}:{media_mock_server.port}/test_document.pdf"
     )
     await send_outbound_message(
-        test_client.app.amqp_connection,
+        app_server.app.amqp_connection,
         Message(
             to_addr="27820001001",
             from_addr="27820001002",
@@ -270,18 +273,19 @@ async def test_outbound_document(whatsapp_mock_server, media_mock_server, test_c
     }
 
 
-async def test_outbound_document_cached(whatsapp_mock_server, test_client):
+@pytest.mark.asyncio
+async def test_outbound_document_cached(whatsapp_mock_server, app_server):
     """
     Should get the media URL from cache
     """
-    test_client.app.consumer.message_url = (
+    app_server.app.consumer.message_url = (
         f"http://{whatsapp_mock_server.host}:{whatsapp_mock_server.port}"
         "/v1/messages/"
     )
     doc_url = "http://example/org/cached+%26.pdf"
-    test_client.app.consumer.media_cache[doc_url] = ("test-media-id", "application/pdf")
+    app_server.app.consumer.media_cache[doc_url] = ("test-media-id", "application/pdf")
     await send_outbound_message(
-        test_client.app.amqp_connection,
+        app_server.app.amqp_connection,
         Message(
             to_addr="27820001001",
             from_addr="27820001002",
@@ -298,22 +302,23 @@ async def test_outbound_document_cached(whatsapp_mock_server, test_client):
     }
 
 
-async def test_outbound_image(whatsapp_mock_server, media_mock_server, test_client):
+@pytest.mark.asyncio
+async def test_outbound_image(whatsapp_mock_server, media_mock_server, app_server):
     """
     Should upload the image, and then send the message with the media ID
     """
-    test_client.app.consumer.message_url = (
+    app_server.app.consumer.message_url = (
         f"http://{whatsapp_mock_server.host}:{whatsapp_mock_server.port}"
         "/v1/messages/"
     )
-    test_client.app.consumer.media_url = (
+    app_server.app.consumer.media_url = (
         f"http://{whatsapp_mock_server.host}:{whatsapp_mock_server.port}/v1/media"
     )
     image_url = (
         f"http://{media_mock_server.host}:{media_mock_server.port}/test_image.jpeg"
     )
     await send_outbound_message(
-        test_client.app.amqp_connection,
+        app_server.app.amqp_connection,
         Message(
             content="test caption",
             to_addr="27820001001",
@@ -331,19 +336,20 @@ async def test_outbound_image(whatsapp_mock_server, media_mock_server, test_clie
     }
 
 
-async def test_outbound_missing_contact(whatsapp_mock_server, test_client):
+@pytest.mark.asyncio
+async def test_outbound_missing_contact(whatsapp_mock_server, app_server):
     """
     Makes a contact check, and then tries again
     """
-    test_client.app.consumer.message_url = (
+    app_server.app.consumer.message_url = (
         f"http://{whatsapp_mock_server.host}:{whatsapp_mock_server.port}/v1/messages"
     )
-    test_client.app.consumer.contact_url = (
+    app_server.app.consumer.contact_url = (
         f"http://{whatsapp_mock_server.host}:{whatsapp_mock_server.port}/v1/contacts"
     )
     whatsapp_mock_server.app.message_status_code = 404
     await send_outbound_message(
-        test_client.app.amqp_connection,
+        app_server.app.amqp_connection,
         Message(
             to_addr="27820001001",
             from_addr="27820001002",
@@ -357,29 +363,30 @@ async def test_outbound_missing_contact(whatsapp_mock_server, test_client):
     contact = await whatsapp_mock_server.app.contact_future
     msg2 = await whatsapp_mock_server.app.future
 
-    assert msg1.url == test_client.app.consumer.message_url
+    assert msg1.url == app_server.app.consumer.message_url
     assert msg1.json == {"text": {"body": "test message"}, "to": "27820001001"}
 
-    assert contact.url == test_client.app.consumer.contact_url
+    assert contact.url == app_server.app.consumer.contact_url
     assert contact.json == {"blocking": "wait", "contacts": ["+27820001001"]}
 
-    assert msg2.url == test_client.app.consumer.message_url
+    assert msg2.url == app_server.app.consumer.message_url
     assert msg2.json == {"text": {"body": "test message"}, "to": "27820001001"}
 
 
-async def test_outbound_missing_contact_permanent(whatsapp_mock_server, test_client):
+@pytest.mark.asyncio
+async def test_outbound_missing_contact_permanent(whatsapp_mock_server, app_server):
     """
     Makes a contact check, and if the contact isn't valid, drop the message
     """
-    test_client.app.consumer.message_url = (
+    app_server.app.consumer.message_url = (
         f"http://{whatsapp_mock_server.host}:{whatsapp_mock_server.port}/v1/messages"
     )
-    test_client.app.consumer.contact_url = (
+    app_server.app.consumer.contact_url = (
         f"http://{whatsapp_mock_server.host}:{whatsapp_mock_server.port}/v1/contacts"
     )
     whatsapp_mock_server.app.message_status_code = 404
     await send_outbound_message(
-        test_client.app.amqp_connection,
+        app_server.app.amqp_connection,
         Message(
             to_addr="27820001111",
             from_addr="27820001000",
@@ -396,16 +403,17 @@ async def test_outbound_missing_contact_permanent(whatsapp_mock_server, test_cli
     assert contact.json == {"blocking": "wait", "contacts": ["+27820001111"]}
 
 
-async def test_buttons_text(whatsapp_mock_server, test_client):
+@pytest.mark.asyncio
+async def test_buttons_text(whatsapp_mock_server, app_server):
     """
     Should submit a message with the requested buttons, header, and footer
     """
-    test_client.app.consumer.message_url = (
+    app_server.app.consumer.message_url = (
         f"http://{whatsapp_mock_server.host}:{whatsapp_mock_server.port}"
         "/v1/messages/"
     )
     await send_outbound_message(
-        test_client.app.amqp_connection,
+        app_server.app.amqp_connection,
         Message(
             to_addr="27820001001",
             from_addr="27820001002",
@@ -439,18 +447,19 @@ async def test_buttons_text(whatsapp_mock_server, test_client):
     }
 
 
-async def test_buttons_image_header(whatsapp_mock_server, test_client):
+@pytest.mark.asyncio
+async def test_buttons_image_header(whatsapp_mock_server, app_server):
     """
     Should upload the image, and then send a message with that image in the header
     """
-    test_client.app.consumer.message_url = (
+    app_server.app.consumer.message_url = (
         f"http://{whatsapp_mock_server.host}:{whatsapp_mock_server.port}"
         "/v1/messages/"
     )
     image_url = "http://example.org/image.png"
-    test_client.app.consumer.media_cache[image_url] = ("test-media-id", "image/png")
+    app_server.app.consumer.media_cache[image_url] = ("test-media-id", "image/png")
     await send_outbound_message(
-        test_client.app.amqp_connection,
+        app_server.app.amqp_connection,
         Message(
             to_addr="27820001001",
             from_addr="27820001002",
@@ -480,18 +489,19 @@ async def test_buttons_image_header(whatsapp_mock_server, test_client):
     }
 
 
-async def test_buttons_video_header(whatsapp_mock_server, test_client):
+@pytest.mark.asyncio
+async def test_buttons_video_header(whatsapp_mock_server, app_server):
     """
     Should upload the video, and then send a message with that video in the header
     """
-    test_client.app.consumer.message_url = (
+    app_server.app.consumer.message_url = (
         f"http://{whatsapp_mock_server.host}:{whatsapp_mock_server.port}"
         "/v1/messages/"
     )
     video_url = "http://example.org/video.mp4"
-    test_client.app.consumer.media_cache[video_url] = ("test-media-id", "video/mp4")
+    app_server.app.consumer.media_cache[video_url] = ("test-media-id", "video/mp4")
     await send_outbound_message(
-        test_client.app.amqp_connection,
+        app_server.app.amqp_connection,
         Message(
             to_addr="27820001001",
             from_addr="27820001002",
@@ -521,21 +531,22 @@ async def test_buttons_video_header(whatsapp_mock_server, test_client):
     }
 
 
-async def test_buttons_document_header(whatsapp_mock_server, test_client):
+@pytest.mark.asyncio
+async def test_buttons_document_header(whatsapp_mock_server, app_server):
     """
     Should upload the document, and then send a message with that document in the header
     """
-    test_client.app.consumer.message_url = (
+    app_server.app.consumer.message_url = (
         f"http://{whatsapp_mock_server.host}:{whatsapp_mock_server.port}"
         "/v1/messages/"
     )
     document_url = "http://example.org/document.pdf"
-    test_client.app.consumer.media_cache[document_url] = (
+    app_server.app.consumer.media_cache[document_url] = (
         "test-media-id",
         "application/pdf",
     )
     await send_outbound_message(
-        test_client.app.amqp_connection,
+        app_server.app.amqp_connection,
         Message(
             to_addr="27820001001",
             from_addr="27820001002",
@@ -568,16 +579,17 @@ async def test_buttons_document_header(whatsapp_mock_server, test_client):
     }
 
 
-async def test_list(whatsapp_mock_server, test_client):
+@pytest.mark.asyncio
+async def test_list(whatsapp_mock_server, app_server):
     """
     Should submit a message with the requested list, header, and footer
     """
-    test_client.app.consumer.message_url = (
+    app_server.app.consumer.message_url = (
         f"http://{whatsapp_mock_server.host}:{whatsapp_mock_server.port}"
         "/v1/messages/"
     )
     await send_outbound_message(
-        test_client.app.amqp_connection,
+        app_server.app.amqp_connection,
         Message(
             to_addr="27820001001",
             from_addr="27820001002",
@@ -619,16 +631,17 @@ async def test_list(whatsapp_mock_server, test_client):
     }
 
 
-async def test_list_limits(whatsapp_mock_server, test_client):
+@pytest.mark.asyncio
+async def test_list_limits(whatsapp_mock_server, app_server):
     """
     Should submit a message with the requested list, header, and footer
     """
-    test_client.app.consumer.message_url = (
+    app_server.app.consumer.message_url = (
         f"http://{whatsapp_mock_server.host}:{whatsapp_mock_server.port}"
         "/v1/messages/"
     )
     await send_outbound_message(
-        test_client.app.amqp_connection,
+        app_server.app.amqp_connection,
         Message(
             to_addr="27820001001",
             from_addr="27820001002",
