@@ -27,7 +27,7 @@ app.update_config(config)
 setup_metrics_middleware(app)
 
 
-@app.listener("before_server_start")
+@app.before_server_start
 async def setup_redis(app, loop):
     if not config.REDIS_URL:
         app.ctx.redis = None
@@ -37,13 +37,13 @@ async def setup_redis(app, loop):
     )
 
 
-@app.listener("after_server_stop")
+@app.after_server_stop
 async def shutdown_redis(app, loop):
     if app.ctx.redis:
         await app.ctx.redis.close()
 
 
-@app.listener("before_server_start")
+@app.before_server_start
 async def setup_amqp(app, loop):
     app.ctx.amqp_connection = await aio_pika.connect_robust(config.AMQP_URL, loop=loop)
     app.ctx.publisher = Publisher(app.ctx.amqp_connection, app.ctx.redis)
@@ -52,7 +52,7 @@ async def setup_amqp(app, loop):
     await app.ctx.consumer.setup()
 
 
-@app.listener("after_server_stop")
+@app.after_server_stop
 async def shutdown_amqp(app, loop):
     await app.ctx.amqp_connection.close()
     await app.ctx.consumer.teardown()
