@@ -72,7 +72,7 @@ async def test_valid_signature(app_server):
     response = await app_server.post(
         app.url_for("whatsapp.whatsapp_webhook"),
         headers={"X-Turn-Hook-Signature": generate_hmac_signature(data, "testsecret")},
-        data=data,
+        content=data,
     )
     assert response.status_code == 400
     assert response.json() == {"messages": {"0": ["'text' is a required property"]}}
@@ -114,7 +114,7 @@ async def test_valid_text_message(app_server):
             "X-Turn-Hook-Signature": generate_hmac_signature(data, "testsecret"),
             "X-Turn-Claim": "test-claim",
         },
-        data=data,
+        content=data,
     )
     assert response.status_code == 200
     assert response.json() == {}
@@ -152,7 +152,7 @@ async def test_valid_unknown_message(app_server):
         headers={
             "X-Turn-Hook-Signature": generate_hmac_signature(data, "testsecret"),
         },
-        data=data,
+        content=data,
     )
     assert response.status_code == 200
     assert response.json() == {}
@@ -196,7 +196,7 @@ async def test_valid_contacts_message(app_server):
         headers={
             "X-Turn-Hook-Signature": generate_hmac_signature(data, "testsecret"),
         },
-        data=data,
+        content=data,
     )
     assert response.status_code == 200
     assert response.json() == {}
@@ -235,7 +235,7 @@ async def test_text_message_conversation_claim_redis(app_server):
             "X-Turn-Hook-Signature": generate_hmac_signature(data, "testsecret"),
             "X-Turn-Claim": "test-claim",
         },
-        data=data,
+        content=data,
     )
     assert response.status_code == 200
     assert response.json() == {}
@@ -265,7 +265,7 @@ async def test_ignore_system_messages(app_server):
     response = await app_server.post(
         app.url_for("whatsapp.whatsapp_webhook"),
         headers={"X-Turn-Hook-Signature": generate_hmac_signature(data, "testsecret")},
-        data=data,
+        content=data,
     )
     assert response.status_code == 200
     assert response.json() == {}
@@ -300,7 +300,7 @@ async def test_valid_location_message(app_server):
     response = await app_server.post(
         app.url_for("whatsapp.whatsapp_webhook"),
         headers={"X-Turn-Hook-Signature": generate_hmac_signature(data, "testsecret")},
-        data=data,
+        content=data,
     )
     assert response.status_code == 200
     assert response.json() == {}
@@ -332,7 +332,7 @@ async def test_valid_button_message(app_server):
     response = await app_server.post(
         app.url_for("whatsapp.whatsapp_webhook"),
         headers={"X-Turn-Hook-Signature": generate_hmac_signature(data, "testsecret")},
-        data=data,
+        content=data,
     )
     assert response.status_code == 200
     assert response.json() == {}
@@ -369,7 +369,7 @@ async def test_valid_media_message(app_server):
     response = await app_server.post(
         app.url_for("whatsapp.whatsapp_webhook"),
         headers={"X-Turn-Hook-Signature": generate_hmac_signature(data, "testsecret")},
-        data=data,
+        content=data,
     )
     assert response.status_code == 200
     assert response.json() == {}
@@ -406,7 +406,7 @@ async def test_valid_media_message_null_caption(app_server):
     response = await app_server.post(
         app.url_for("whatsapp.whatsapp_webhook"),
         headers={"X-Turn-Hook-Signature": generate_hmac_signature(data, "testsecret")},
-        data=data,
+        content=data,
     )
     assert response.status_code == 200
     assert response.json() == {}
@@ -434,7 +434,7 @@ async def test_valid_event(app_server):
     response = await app_server.post(
         app.url_for("whatsapp.whatsapp_webhook"),
         headers={"X-Turn-Hook-Signature": generate_hmac_signature(data, "testsecret")},
-        data=data,
+        content=data,
     )
     assert response.status_code == 200
     assert response.json() == {}
@@ -471,10 +471,10 @@ async def test_duplicate_message(app_server):
     }
     url = app.url_for("whatsapp.whatsapp_webhook")
 
-    await app_server.post(url, headers=headers, data=data)
+    await app_server.post(url, headers=headers, content=data)
     await get_amqp_message(queue)
 
-    await app_server.post(url, headers=headers, data=data)
+    await app_server.post(url, headers=headers, content=data)
     err = None
     try:
         await get_amqp_message(queue)
@@ -508,10 +508,10 @@ async def test_duplicate_message_no_redis(app_server):
         "X-Turn-Claim": "test-claim",
     }
     url = app.url_for("whatsapp.whatsapp_webhook")
-    await app_server.post(url, headers=headers, data=data)
+    await app_server.post(url, headers=headers, content=data)
     await get_amqp_message(queue)
 
-    await app_server.post(url, headers=headers, data=data)
+    await app_server.post(url, headers=headers, content=data)
     await get_amqp_message(queue)
 
 
@@ -540,7 +540,7 @@ async def test_valid_interactive_list_reply_message(app_server):
     response = await app_server.post(
         app.url_for("whatsapp.whatsapp_webhook"),
         headers={"X-Turn-Hook-Signature": generate_hmac_signature(data, "testsecret")},
-        data=data,
+        content=data,
     )
     assert response.status_code == 200
     assert response.json() == {}
@@ -575,7 +575,7 @@ async def test_valid_interactive_button_reply_message(app_server):
     response = await app_server.post(
         app.url_for("whatsapp.whatsapp_webhook"),
         headers={"X-Turn-Hook-Signature": generate_hmac_signature(data, "testsecret")},
-        data=data,
+        content=data,
     )
     assert response.status_code == 200
     assert response.json() == {}

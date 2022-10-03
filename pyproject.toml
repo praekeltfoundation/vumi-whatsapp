@@ -49,5 +49,4 @@ filterwarnings = [
     "default::DeprecationWarning:sanic.server:556",
     "default::DeprecationWarning:sanic.server.runners:133",
     "default::DeprecationWarning:asyncio.streams",
-    "default::DeprecationWarning:httpx",
 ]
