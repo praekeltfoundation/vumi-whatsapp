@@ -7,6 +7,7 @@ import redis.asyncio as aioredis
 from aio_pika import connect_robust
 from sanic import Sanic
 from sanic.server import AsyncioServer
+from sentry_sdk.integrations import sanic as si_sanic
 
 from vxwhatsapp import config
 
@@ -83,17 +84,49 @@ async def run_sanic(app):
     Run a sanic app as a context manager. Best used in pytest fixtures.
     """
     Sanic.test_mode = True
+    if hasattr(si_sanic, "old_startup"):
+        Sanic._startup = _conditional_sentry_startup
     port = unused_port()
     server = await app.create_server(return_asyncio_server=True, port=port)
+
     if hasattr(server, "startup"):
-        # This was introduced between 21.6 and 21.12
+        # For sanic >= 21.9
         await server.startup()
-    await server.start_serving()
+        await server.before_start()
+        await server.start_serving()
+        await server.after_start()
+    else:
+        # For sanic < 21.9
+        # Sanic has already handled before_start for us here
+        await server.start_serving()
+        for f in server._after_start:
+            await f(server.loop)
+
     [sock] = server.server.sockets
     host, port = sock.getsockname()
     yield MockServer(app, server, host, port)
-    for f in server._before_stop:
-        await f(server.loop)
-    await server.close()
-    for f in server._after_stop:
-        await f(server.loop)
+
+    if hasattr(server, "startup"):
+        # For sanic >= 21.9
+        await server.before_stop()
+        await server.close()
+        await server.after_stop()
+    else:
+        # For sanic < 21.9
+        for f in server._before_stop:
+            await f(server.loop)
+        await server.close()
+        for f in server._after_stop:
+            await f(server.loop)
+
+
+async def _conditional_sentry_startup(app):
+    """
+    Replace the app startup patch sentry-sdk applies with one that only adds
+    the signal handlers once per application.
+    """
+    if getattr(app.ctx, "sentry_startup_has_run", False):
+        await si_sanic._startup(app)
+        app.ctx.sentry_startup_has_run = True
+    else:
+        await si_sanic.old_startup(app)
