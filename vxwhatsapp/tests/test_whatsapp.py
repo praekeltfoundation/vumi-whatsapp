@@ -94,7 +94,7 @@ async def get_amqp_message(queue: Queue):
 
 @pytest.mark.asyncio
 async def test_valid_text_message(app_server):
-    queue = await setup_amqp_queue(app_server.app.amqp_connection)
+    queue = await setup_amqp_queue(app_server.app.ctx.amqp_connection)
     data = ujson.dumps(
         {
             "messages": [
@@ -134,7 +134,7 @@ async def test_valid_text_message(app_server):
 
 @pytest.mark.asyncio
 async def test_valid_unknown_message(app_server):
-    queue = await setup_amqp_queue(app_server.app.amqp_connection)
+    queue = await setup_amqp_queue(app_server.app.ctx.amqp_connection)
     data = ujson.dumps(
         {
             "messages": [
@@ -168,7 +168,7 @@ async def test_valid_unknown_message(app_server):
 
 @pytest.mark.asyncio
 async def test_valid_contacts_message(app_server):
-    queue = await setup_amqp_queue(app_server.app.amqp_connection)
+    queue = await setup_amqp_queue(app_server.app.ctx.amqp_connection)
     contact = {
         "addresses": [],
         "emails": [],
@@ -215,7 +215,7 @@ async def test_valid_contacts_message(app_server):
 
 @pytest.mark.asyncio
 async def test_text_message_conversation_claim_redis(app_server):
-    queue = await setup_amqp_queue(app_server.app.amqp_connection)
+    queue = await setup_amqp_queue(app_server.app.ctx.amqp_connection)
     data = ujson.dumps(
         {
             "messages": [
@@ -241,14 +241,14 @@ async def test_text_message_conversation_claim_redis(app_server):
     assert response.json() == {}
 
     await get_amqp_message(queue)
-    [address] = await app_server.app.redis.zrange("claims", 0, -1)
+    [address] = await app_server.app.ctx.redis.zrange("claims", 0, -1)
     assert address == "27820001001"
-    await app_server.app.redis.delete("claims")
+    await app_server.app.ctx.redis.delete("claims")
 
 
 @pytest.mark.asyncio
 async def test_ignore_system_messages(app_server):
-    queue = await setup_amqp_queue(app_server.app.amqp_connection)
+    queue = await setup_amqp_queue(app_server.app.ctx.amqp_connection)
     data = ujson.dumps(
         {
             "messages": [
@@ -283,7 +283,7 @@ async def test_valid_location_message(app_server):
     """
     Should put the name of the location as the message content
     """
-    queue = await setup_amqp_queue(app_server.app.amqp_connection)
+    queue = await setup_amqp_queue(app_server.app.ctx.amqp_connection)
     data = ujson.dumps(
         {
             "messages": [
@@ -315,7 +315,7 @@ async def test_valid_button_message(app_server):
     """
     Should put the button response as the message content
     """
-    queue = await setup_amqp_queue(app_server.app.amqp_connection)
+    queue = await setup_amqp_queue(app_server.app.ctx.amqp_connection)
     data = ujson.dumps(
         {
             "messages": [
@@ -347,7 +347,7 @@ async def test_valid_media_message(app_server):
     """
     Should put the media caption as the message content
     """
-    queue = await setup_amqp_queue(app_server.app.amqp_connection)
+    queue = await setup_amqp_queue(app_server.app.ctx.amqp_connection)
     data = ujson.dumps(
         {
             "messages": [
@@ -384,7 +384,7 @@ async def test_valid_media_message_null_caption(app_server):
     """
     Should have null message content
     """
-    queue = await setup_amqp_queue(app_server.app.amqp_connection)
+    queue = await setup_amqp_queue(app_server.app.ctx.amqp_connection)
     data = ujson.dumps(
         {
             "messages": [
@@ -418,7 +418,7 @@ async def test_valid_media_message_null_caption(app_server):
 
 @pytest.mark.asyncio
 async def test_valid_event(app_server):
-    queue = await setup_amqp_queue(app_server.app.amqp_connection, "whatsapp.event")
+    queue = await setup_amqp_queue(app_server.app.ctx.amqp_connection, "whatsapp.event")
     data = ujson.dumps(
         {
             "statuses": [
@@ -451,7 +451,7 @@ async def test_valid_event(app_server):
 
 @pytest.mark.asyncio
 async def test_duplicate_message(app_server):
-    queue = await setup_amqp_queue(app_server.app.amqp_connection)
+    queue = await setup_amqp_queue(app_server.app.ctx.amqp_connection)
     data = ujson.dumps(
         {
             "messages": [
@@ -488,8 +488,8 @@ async def test_duplicate_message_no_redis(app_server):
     """
     If there's no redis configured, then we allow duplicate messages
     """
-    queue = await setup_amqp_queue(app_server.app.amqp_connection)
-    app_server.app.redis = None
+    queue = await setup_amqp_queue(app_server.app.ctx.amqp_connection)
+    app_server.app.ctx.redis = None
     data = ujson.dumps(
         {
             "messages": [
@@ -520,7 +520,7 @@ async def test_valid_interactive_list_reply_message(app_server):
     """
     Should put the list item as the message content
     """
-    queue = await setup_amqp_queue(app_server.app.amqp_connection)
+    queue = await setup_amqp_queue(app_server.app.ctx.amqp_connection)
     data = ujson.dumps(
         {
             "messages": [
@@ -555,7 +555,7 @@ async def test_valid_interactive_button_reply_message(app_server):
     """
     Should put the button text as the message content
     """
-    queue = await setup_amqp_queue(app_server.app.amqp_connection)
+    queue = await setup_amqp_queue(app_server.app.ctx.amqp_connection)
     data = ujson.dumps(
         {
             "messages": [

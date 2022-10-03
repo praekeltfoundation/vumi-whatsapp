@@ -43,4 +43,11 @@ max-line-length = 88
 addopts = "--cov=vxwhatsapp"
 filterwarnings = [
     "error::UserWarning:_pytest",  # For PytestUnhandledCoroutineWarning
+    "error::DeprecationWarning",
+    # Various things pass a deprecated loop arg, presumably for python 3.7
+    "default::DeprecationWarning:pytest_asyncio",
+    "default::DeprecationWarning:sanic.server:556",
+    "default::DeprecationWarning:sanic.server.runners:133",
+    "default::DeprecationWarning:asyncio.streams",
+    "default::DeprecationWarning:httpx",
 ]

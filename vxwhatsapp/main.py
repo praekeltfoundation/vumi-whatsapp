@@ -30,40 +30,40 @@ setup_metrics_middleware(app)
 @app.listener("before_server_start")
 async def setup_redis(app, loop):
     if not config.REDIS_URL:
-        app.redis = None
+        app.ctx.redis = None
         return
-    app.redis = aioredis.from_url(
+    app.ctx.redis = aioredis.from_url(
         config.REDIS_URL, encoding="utf8", decode_responses=True
     )
 
 
 @app.listener("after_server_stop")
 async def shutdown_redis(app, loop):
-    if app.redis:
-        await app.redis.close()
+    if app.ctx.redis:
+        await app.ctx.redis.close()
 
 
 @app.listener("before_server_start")
 async def setup_amqp(app, loop):
-    app.amqp_connection = await aio_pika.connect_robust(config.AMQP_URL, loop=loop)
-    app.publisher = Publisher(app.amqp_connection, app.redis)
-    await app.publisher.setup()
-    app.consumer = Consumer(app.amqp_connection, app.redis)
-    await app.consumer.setup()
+    app.ctx.amqp_connection = await aio_pika.connect_robust(config.AMQP_URL, loop=loop)
+    app.ctx.publisher = Publisher(app.ctx.amqp_connection, app.ctx.redis)
+    await app.ctx.publisher.setup()
+    app.ctx.consumer = Consumer(app.ctx.amqp_connection, app.ctx.redis)
+    await app.ctx.consumer.setup()
 
 
 @app.listener("after_server_stop")
 async def shutdown_amqp(app, loop):
-    await app.amqp_connection.close()
-    await app.consumer.teardown()
-    await app.publisher.teardown()
+    await app.ctx.amqp_connection.close()
+    await app.ctx.consumer.teardown()
+    await app.ctx.publisher.teardown()
 
 
 @app.route("/")
 async def health(request: Request) -> HTTPResponse:
     result: dict = {"status": "ok", "amqp": {}}
 
-    amqp_connection = app.amqp_connection  # type: ignore
+    amqp_connection = app.ctx.amqp_connection  # type: ignore
     if amqp_connection.connection is None:  # pragma: no cover
         result["amqp"]["connection"] = False
         result["status"] = "down"
@@ -73,7 +73,7 @@ async def health(request: Request) -> HTTPResponse:
         )
         result["amqp"]["connection"] = True
 
-    redis = app.redis  # type: ignore
+    redis = app.ctx.redis  # type: ignore
     if redis:
         result["redis"] = {}
         try:

@@ -16,9 +16,9 @@ bp = Blueprint("whatsapp", version=1)
 
 async def publish_message(request, message):
     return await gather(
-        request.app.publisher.publish_message(message),
+        request.app.ctx.publisher.publish_message(message),
         store_conversation_claim(
-            request.app.redis,
+            request.app.ctx.redis,
             request.headers.get("X-Turn-Claim"),
             message.from_addr,
         ),
@@ -26,18 +26,18 @@ async def publish_message(request, message):
 
 
 async def dedupe_and_publish_message(request, message):
-    if not request.app.redis:
+    if not request.app.ctx.redis:
         return await publish_message(request, message)
     lock_key = f"msglock:{message.message_id}"
     seen_key = f"msgseen:{message.message_id}"
-    lock = request.app.redis.lock(
+    lock = request.app.ctx.redis.lock(
         lock_key, timeout=config.LOCK_TIMEOUT, blocking_timeout=config.LOCK_TIMEOUT * 2
     )
     async with lock:
-        if await request.app.redis.get(seen_key) is not None:
+        if await request.app.ctx.redis.get(seen_key) is not None:
             return
         await publish_message(request, message)
-        await request.app.redis.setex(seen_key, config.DEDUPLICATION_WINDOW, "")
+        await request.app.ctx.redis.setex(seen_key, config.DEDUPLICATION_WINDOW, "")
 
 
 @bp.route("/webhook", methods=["POST"])
@@ -119,7 +119,7 @@ async def whatsapp_webhook(request: Request) -> HTTPResponse:
             delivery_status=delivery_status,
             helper_metadata=ev,
         )
-        tasks.append(request.app.publisher.publish_event(event))  # type: ignore
+        tasks.append(request.app.ctx.publisher.publish_event(event))  # type: ignore
 
     await gather(*tasks)
     return json({})
