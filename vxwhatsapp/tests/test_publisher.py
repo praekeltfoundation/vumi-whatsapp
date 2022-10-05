@@ -2,6 +2,7 @@ import time
 from typing import AsyncGenerator
 
 import pytest
+import pytest_asyncio
 from aio_pika import Connection
 from aio_pika import Message as AMQPMessage
 from aio_pika import Queue, connect_robust
@@ -13,7 +14,7 @@ from vxwhatsapp.publisher import Publisher
 from vxwhatsapp.tests.utils import cleanup_amqp, cleanup_redis
 
 
-@pytest.fixture
+@pytest_asyncio.fixture
 async def amqp() -> AsyncGenerator[Connection, None]:
     conn: Connection = await connect_robust(config.AMQP_URL)
     yield conn
@@ -21,7 +22,7 @@ async def amqp() -> AsyncGenerator[Connection, None]:
     await cleanup_amqp()
 
 
-@pytest.fixture
+@pytest_asyncio.fixture
 async def redis() -> AsyncGenerator[Redis, None]:
     conn = from_url(
         config.REDIS_URL or "redis://", encoding="utf8", decode_responses=True
@@ -45,6 +46,7 @@ async def get_amqp_message(queue: Queue) -> AMQPMessage:
     return message
 
 
+@pytest.mark.asyncio
 async def test_session_timeout_check(amqp: Connection, redis: Redis):
     queue = await setup_amqp_queue(amqp)
     publisher = Publisher(amqp, redis)

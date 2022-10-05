@@ -1,34 +1,33 @@
 import pytest
+import pytest_asyncio
 
 from vxwhatsapp import config
 from vxwhatsapp.main import app
-from vxwhatsapp.tests.utils import cleanup_amqp, cleanup_redis
+from vxwhatsapp.tests.utils import cleanup_amqp, cleanup_redis, run_sanic
 
 
-@pytest.fixture(autouse=True)
-async def cleanup():
-    """
-    Ensure that we always cleanup redis and amqp
-    """
+@pytest_asyncio.fixture
+async def app_server():
+    config.REDIS_URL = config.REDIS_URL or "redis://"
+    async with run_sanic(app) as server:
+        yield server
     await cleanup_amqp()
     await cleanup_redis()
 
 
-@pytest.fixture
-async def test_client(sanic_client):
-    return await sanic_client(app)
-
-
-@pytest.fixture
-async def test_client_no_redis(sanic_client):
+@pytest_asyncio.fixture
+async def app_server_no_redis():
     redis = config.REDIS_URL
     config.REDIS_URL = None
-    yield (await sanic_client(app))
+    async with run_sanic(app) as server:
+        yield server
+    await cleanup_amqp()
     config.REDIS_URL = redis
 
 
-async def test_health(test_client):
-    response = await test_client.get(app.url_for("health"))
+@pytest.mark.asyncio
+async def test_health(app_server):
+    response = await app_server.get(app.url_for("health"))
     assert response.status_code == 200
     data = response.json()
     assert isinstance(data["amqp"].pop("time_since_last_heartbeat"), float)
@@ -40,8 +39,9 @@ async def test_health(test_client):
     }
 
 
-async def test_health_no_redis(test_client_no_redis):
-    response = await test_client_no_redis.get(app.url_for("health"))
+@pytest.mark.asyncio
+async def test_health_no_redis(app_server_no_redis):
+    response = await app_server_no_redis.get(app.url_for("health"))
     assert response.status_code == 200
     data = response.json()
     assert isinstance(data["amqp"].pop("time_since_last_heartbeat"), float)
@@ -51,7 +51,8 @@ async def test_health_no_redis(test_client_no_redis):
     }
 
 
-async def test_metrics(test_client):
-    response = await test_client.get(app.url_for("metrics"))
+@pytest.mark.asyncio
+async def test_metrics(app_server):
+    response = await app_server.get(app.url_for("metrics"))
     assert response.status_code == 200
     assert "sanic_request_latency_sec" in response.text
