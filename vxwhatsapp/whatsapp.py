@@ -100,7 +100,7 @@ async def whatsapp_webhook(request: Request) -> HTTPResponse:
                 Event.EVENT_TYPE.DELIVERY_REPORT,
                 Event.DELIVERY_STATUS.DELIVERED,
             ),
-            "ack": (Event.EVENT_TYPE.ACK, None),
+            "sent": (Event.EVENT_TYPE.ACK, None),
             "failed": (
                 Event.EVENT_TYPE.DELIVERY_REPORT,
                 Event.DELIVERY_STATUS.FAILED,
