@@ -3,6 +3,7 @@ import time
 from asyncio import Future
 from dataclasses import dataclass, field
 from io import StringIO
+from unittest.mock import MagicMock
 
 import pytest
 import pytest_asyncio
@@ -172,6 +173,33 @@ async def test_outbound_text_message_client_error(whatsapp_mock_server, app_serv
     assert request.json == {"text": {"body": "test message 2"}, "to": "27820001003"}
 
     assert whatsapp_mock_server.tstate.request_count == 1
+
+
+@pytest.mark.asyncio
+async def test_outbound_text_message_server_error(whatsapp_mock_server, app_server):
+    """
+    Should make a request to the whatsapp API, and retry for server errors
+    """
+    app_server.app.ctx.consumer.message_url = (
+        f"http://{whatsapp_mock_server.host}:{whatsapp_mock_server.port}/v1/messages"
+    )
+    whatsapp_mock_server.tstate.message_client_error_code = 500
+    await send_outbound_message(
+        app_server.app.ctx.amqp_connection,
+        Message(
+            to_addr="27820001003",
+            from_addr="27820001002",
+            transport_name="whatsapp",
+            transport_type=Message.TRANSPORT_TYPE.HTTP_API,
+            transport_metadata={},
+            content="test message 2",
+        ),
+    )
+    for _ in range(3):
+        await whatsapp_mock_server.tstate.future
+        whatsapp_mock_server.tstate.future = Future()
+
+    assert whatsapp_mock_server.tstate.request_count == 3
 
 
 @pytest.mark.asyncio
@@ -687,3 +715,28 @@ async def test_list_limits(whatsapp_mock_server, app_server):
     assert len(request.json["interactive"]["body"]["text"]) == 1024
     assert len(request.json["interactive"]["header"]["text"]) == 60
     assert len(request.json["interactive"]["footer"]["text"]) == 60
+
+
+@pytest.mark.asyncio
+async def test_outbound_exception(app_server):
+    """
+    If there are any exceptions, they should be logged and not requeued
+    """
+    log_stream = StringIO()
+    logger.addHandler(logging.StreamHandler(log_stream))
+    app_server.app.ctx.consumer.submit_message = MagicMock()
+    app_server.app.ctx.consumer.submit_message.side_effect = Exception()
+
+    await send_outbound_message(
+        app_server.app.ctx.amqp_connection,
+        Message(
+            to_addr="27820001001",
+            from_addr="27820001002",
+            transport_name="whatsapp",
+            transport_type=Message.TRANSPORT_TYPE.HTTP_API,
+            transport_metadata={"claim": "test-claim"},
+            content="test message",
+        ),
+    )
+
+    assert "Error processing" in log_stream.getvalue()

@@ -1,4 +1,5 @@
 import os
+from asyncio import sleep
 from json.decoder import JSONDecodeError
 from typing import Any, Dict
 from urllib.parse import ParseResult, unquote_plus, urlparse, urlunparse
@@ -9,7 +10,6 @@ from aio_pika import Connection, ExchangeType, IncomingMessage
 from prometheus_client import Histogram
 from redis.asyncio import Redis
 from sanic.log import logger
-from sentry_sdk import capture_exception
 
 from vxwhatsapp import config
 from vxwhatsapp.claims import delete_conversation_claim, store_conversation_claim
@@ -99,13 +99,21 @@ class Consumer:
             try:
                 await self.submit_message(msg)
             except aiohttp.ClientResponseError as e:
+                # If it's a retryable upstream error, requeue the message
                 if e.status > 499:
                     await message.reject(requeue=True)
+                    # If we've retried this before, wait before retrying again
+                    if message.redelivered:
+                        await sleep(0.5)
                     return
 
-                capture_exception(e)
+                # Otherwise log the error and reject
+                logger.exception(f"Upstream HTTP error processing {msg}")
+                await message.reject(requeue=False)
             except Exception:
-                await message.reject(requeue=True)
+                # Any other errors aren't recoverable, so log and reject
+                logger.exception(f"Error processing {msg}")
+                await message.reject(requeue=False)
 
     async def get_media_id(self, media_url):
         if media_url in self.media_cache:
