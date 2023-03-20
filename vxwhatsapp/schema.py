@@ -185,6 +185,10 @@ whatsapp_webhook_schema = {
             "properties": {
                 "id": {"type": "string"},
                 "recipient_id": {"type": "string"},
+                "message": {
+                    "type": "object",
+                    "properties": {"recipient_id": {"type": "string"}},
+                },
                 "status": {
                     "type": "string",
                     "enum": ["read", "delivered", "sent", "failed", "deleted"],
@@ -202,7 +206,7 @@ whatsapp_webhook_schema = {
                     },
                 },
             },
-            "required": ["id", "recipient_id", "status", "timestamp"],
+            "required": ["id", "status", "timestamp"],
         },
         "error": {
             "type": "object",
