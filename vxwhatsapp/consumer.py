@@ -94,26 +94,27 @@ class Consumer:
             await message.reject(requeue=False)
             return
 
-        logger.debug(f"Processing outbound message {msg}")
-        try:
-            await self.submit_message(msg)
-        except aiohttp.ClientResponseError as e:
-            # If it's a retryable upstream error, requeue the message
-            if e.status > 499:
-                await message.reject(requeue=True)
-                # If we've retried this before, wait before retrying again
-                if message.redelivered:
-                    await sleep(0.5)
-            else:
-                # Otherwise log the error and reject
-                logger.exception(f"Upstream HTTP error processing {msg}")
+        async with message.process():
+            logger.debug(f"Processing outbound message {msg}")
+            try:
+                await self.submit_message(msg)
+            except aiohttp.ClientResponseError as e:
+                # If it's a retryable upstream error, requeue the message
+                if e.status > 499:
+                    await message.reject(requeue=True)
+                    # If we've retried this before, wait before retrying again
+                    if message.redelivered:
+                        await sleep(0.5)
+                else:
+                    # Otherwise log the error and reject
+                    logger.exception(f"Upstream HTTP error processing {msg}")
+                    await message.reject(requeue=False)
+            except Exception:
+                # Any other errors aren't recoverable, so log and reject
+                logger.exception(f"Error processing {msg}")
                 await message.reject(requeue=False)
-        except Exception:
-            # Any other errors aren't recoverable, so log and reject
-            logger.exception(f"Error processing {msg}")
-            await message.reject(requeue=False)
-        else:
-            await message.ack()
+            else:
+                await message.ack()
 
     async def get_media_id(self, media_url):
         if media_url in self.media_cache:
