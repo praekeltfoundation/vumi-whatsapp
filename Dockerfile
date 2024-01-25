@@ -2,7 +2,7 @@ FROM ghcr.io/praekeltfoundation/python-base-nw:3.9-bullseye as build
 
 # Requirements to build wheels where there are no python 3.9 wheels
 RUN apt-get-install.sh gcc libc-dev make
-RUN pip install "poetry==1.2.0"
+RUN pip install "poetry==1.7.1"
 RUN poetry config virtualenvs.in-project true
 
 # Install just the deps so we use cached layers if they haven't changed
