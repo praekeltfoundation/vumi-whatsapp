@@ -17,6 +17,7 @@ jsonschema = "^3.2.0"
 aio-pika = "^6.7.1"
 aiohttp = {extras = ["speedups"], version = "^3.7.4"}
 redis = "^4.4.4"
+websockets = "10.0"
 
 [tool.poetry.dev-dependencies]
 black = "^21.11b1"
