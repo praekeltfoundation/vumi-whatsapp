@@ -201,7 +201,7 @@ whatsapp_webhook_schema = {
                 "pricing": {
                     "type": "object",
                     "properties": {
-                        "pricing_model": {"type": "string", "enum": ["CBP", "NBP"]},
+                        "pricing_model": {"type": "string", "enum": ["CBP", "PMP"]},
                         "billable": {"type": "boolean"},
                     },
                 },
